@@ -19,6 +19,10 @@ export class Input {
   private backPressed = false;
   /** a pad talked to us recently — menus auto-focus for it */
   hasPad = false;
+  /** the pad we locked onto (from connect events or activity) */
+  private padIndex: number | null = null;
+  /** diagnostics: what the game currently sees */
+  padId: string | null = null;
 
   constructor() {
     window.addEventListener('keydown', (e) => {
@@ -30,24 +34,44 @@ export class Input {
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
+    // lock onto pads the browser announces (Chrome only lists a pad in
+    // getGamepads() after this event has fired for it)
+    window.addEventListener('gamepadconnected', (e) => {
+      this.padIndex = (e as GamepadEvent).gamepad.index;
+    });
+    window.addEventListener('gamepaddisconnected', (e) => {
+      if (this.padIndex === (e as GamepadEvent).gamepad.index) this.padIndex = null;
+    });
   }
 
-  /** read the first connected pad — call once per rendered frame */
+  /** read the active pad — call once per rendered frame. Ghost receivers and
+   * idle duplicates are common on Windows, so any pad showing REAL input
+   * steals the lock from a silent one. */
   pollGamepad() {
     const pads = navigator.getGamepads?.() ?? [];
-    let gp: Gamepad | null = null;
+    let gp: Gamepad | null = this.padIndex !== null ? (pads[this.padIndex] ?? null) : null;
+    if (gp && !gp.connected) gp = null;
+    let fallback: Gamepad | null = gp;
     for (const p of pads) {
-      if (p && p.connected) {
-        gp = p;
+      if (!p || !p.connected) continue;
+      fallback = fallback ?? p;
+      const alive =
+        p.buttons.some((b) => b && b.pressed) || p.axes.some((a) => Math.abs(a) > 0.3);
+      if (alive && p !== gp) {
+        gp = p; // this one is actually being held
         break;
       }
     }
+    gp = gp ?? fallback;
     if (!gp) {
       this.padMove.x = 0;
       this.padMove.z = 0;
       this.hasPad = false;
+      this.padId = null;
       return;
     }
+    this.padIndex = gp.index;
+    this.padId = gp.id;
     this.hasPad = true;
     const dead = (v: number) => (Math.abs(v) < 0.18 ? 0 : v);
     let x = dead(gp.axes[0] ?? 0);

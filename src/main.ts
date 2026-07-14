@@ -152,6 +152,12 @@ async function boot() {
 void boot();
 // unlock audio on the first gesture anywhere
 window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+// make pad detection VISIBLE — no guessing whether the browser sees it
+window.addEventListener('gamepadconnected', (e) => {
+  hud.announce('ГЕЙМПАД ПОДКЛЮЧЁН');
+  console.info('gamepad connected:', (e as GamepadEvent).gamepad.id, 'mapping:', (e as GamepadEvent).gamepad.mapping);
+});
+window.addEventListener('gamepaddisconnected', () => hud.announce('ГЕЙМПАД ОТКЛЮЧЁН'));
 
 /**
  * Boot warmup: build one of everything at a hidden position, prime every
@@ -288,7 +294,8 @@ function updatePerfText() {
     `SIM  ${tps.toFixed(0)} tps\n` +
     `CPU  ${cpuMs.toFixed(2)} ms\n` +
     `GPU  ${timerExt ? gpuMs.toFixed(2) + ' ms' : 'n/a'}\n` +
-    `FREE ${headroom.toFixed(0)}% of ${budget.toFixed(1)} ms`;
+    `FREE ${headroom.toFixed(0)}% of ${budget.toFixed(1)} ms\n` +
+    `PAD  ${input.padId ? input.padId.slice(0, 24) : '—'}`;
 }
 
 // -------------------------------------------------- GTAO tuning panel (F4)
