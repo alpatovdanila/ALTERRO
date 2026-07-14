@@ -50,6 +50,31 @@ html, body, #app {
 }
 #fx-fade { background: #000; z-index: 50; transition: opacity 0.35s linear; }
 
+/* ---------- orbital strike targeting (screen space) ---------- */
+.strike-frame {
+  position: absolute; left: 50%; top: 50%; z-index: 36; pointer-events: none;
+  width: 44px; height: 34px; transform: translate(-50%, -50%);
+  border: 2px solid var(--ember);
+  box-shadow: 0 0 18px rgba(255, 123, 28, 0.5), inset 0 0 18px rgba(255, 123, 28, 0.2);
+  transition:
+    width 0.55s cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 0.55s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.3s linear;
+}
+.strike-frame.expanded { width: 86vw; height: 80vh; }
+.strike-frame.locked { opacity: 0; }
+.strike-mark {
+  position: absolute; z-index: 36; pointer-events: none;
+  width: 28px; height: 28px; margin: -14px 0 0 -14px;
+  border: 2px solid var(--ember);
+  box-shadow: 0 0 10px rgba(255, 123, 28, 0.8), inset 0 0 8px rgba(255, 123, 28, 0.35);
+  animation: mark-pop 0.16s ease-out;
+}
+@keyframes mark-pop {
+  0% { scale: 2.6; opacity: 0; }
+  100% { scale: 1; opacity: 1; }
+}
+
 /* ---------- screen-edge states ---------- */
 #edge-low, #edge-ult {
   position: absolute; inset: 0; pointer-events: none; z-index: 32;

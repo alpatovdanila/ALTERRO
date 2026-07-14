@@ -1121,6 +1121,15 @@ export class Stage {
     this.key.shadow.needsUpdate = true;
   }
 
+  /** world → screen-space pixels (for DOM targeting overlays) */
+  toScreen(x: number, y: number, z: number): { x: number; y: number } {
+    tmpV.set(x, y, z).project(this.camera);
+    return {
+      x: (tmpV.x * 0.5 + 0.5) * window.innerWidth,
+      y: (-tmpV.y * 0.5 + 0.5) * window.innerHeight,
+    };
+  }
+
   /** snap the follow camera to the player (room transitions) */
   snapCamera(playerZ: number) {
     this.camFocusZ = THREE.MathUtils.clamp(playerZ, -ARENA_D / 2 + 5, ARENA_D / 2 - 5);

@@ -72,6 +72,10 @@ export interface Enemy {
     chargeHit: boolean;
     phase2: boolean;
     addsSpawned: [boolean, boolean];
+    /** add waves owed but held back — never spawned in the same instant as
+     * the hit that earned them (an airstrike must not conjure enemies) */
+    addsPending: number;
+    addsDelayT: number;
   };
 }
 
@@ -212,7 +216,8 @@ export class Game {
   private ambientSparkT = 20;
   /** reinforcement waves still queued for this room */
   private wavesLeft = 0;
-  private waveWarnT = 0;
+  /** silence timer: a strictly-sequential wave waits out this gap */
+  private waveGapT = 0;
   /** room 1 only: a breath of quiet before first contact */
   private waveDelayT = 0;
   /** pause between the last kill landing and the XP motes lifting off */
@@ -626,7 +631,7 @@ export class Game {
       torn: new Set(),
       aggroed: false,
       boss: def.behavior === 'boss'
-        ? { attack: 'idle', attackT: 0, cooldown: 2, chargeDir: new THREE.Vector3(), chargeHit: false, phase2: false, addsSpawned: [false, false] }
+        ? { attack: 'idle', attackT: 0, cooldown: 2, chargeDir: new THREE.Vector3(), chargeHit: false, phase2: false, addsSpawned: [false, false], addsPending: 0, addsDelayT: 0 }
         : null,
     };
     this.enemies.push(e);
@@ -1128,15 +1133,24 @@ export class Game {
     }
     if (!this.roomCleared && this.waveDelayT <= 0 && this.wavesLeft > 0 && this.room !== FINAL_ROOM) {
       const alive = this.enemies.filter((e) => e.state !== 'spawn').length;
-      if (this.enemies.length <= 2 || alive <= 2) {
-        this.waveWarnT -= dt;
-        if (this.waveWarnT <= 0) {
+      if (this.enemies.length === 0) {
+        // strictly sequential wave: the field went silent (ult wipe, last
+        // kill) — hold TWO SECONDS before the next one drops
+        this.waveGapT += dt;
+        if (this.waveGapT >= 2) {
+          this.waveGapT = 0;
           this.wavesLeft--;
-          this.waveWarnT = 0.9; // breather before the next thinning triggers
           this.spawnWave(true);
         }
+      } else if (alive <= 2 && alive === this.enemies.length) {
+        // overlap wave: the fight thinned to its last two — reinforce NOW.
+        // (alive === length keeps a freshly-risen wave from counting as
+        // "thinned" while its members are still in spawn state)
+        this.waveGapT = 0;
+        this.wavesLeft--;
+        this.spawnWave(true);
       } else {
-        this.waveWarnT = 0.9;
+        this.waveGapT = 0;
       }
     }
 
@@ -1641,14 +1655,23 @@ export class Game {
       sfx.bossRoar();
       this.stage.addShake(0.7);
     }
-    // add spawns at 66% / 33%
+    // add waves earned at 66% / 33% — but delivered TWO SECONDS later, never
+    // in the same breath as the blow that crossed the threshold
     if (!b.addsSpawned[0] && e.hp < e.maxHp * 0.66) {
       b.addsSpawned[0] = true;
-      this.spawnBossAdds();
+      b.addsPending++;
     }
     if (!b.addsSpawned[1] && e.hp < e.maxHp * 0.33) {
       b.addsSpawned[1] = true;
-      this.spawnBossAdds();
+      b.addsPending++;
+    }
+    if (b.addsPending > 0) {
+      b.addsDelayT += dt;
+      if (b.addsDelayT >= 2) {
+        b.addsDelayT = 0;
+        b.addsPending--;
+        this.spawnBossAdds();
+      }
     }
 
     const speedMult = b.phase2 ? 1.45 : 1;

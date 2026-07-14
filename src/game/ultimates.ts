@@ -4,6 +4,7 @@ import type { UltimateId } from '../data/ultimates';
 import { buildGravelightOrb, buildCasket, buildSingularity, type BuiltMesh } from '../render/meshes';
 import { sfx } from '../core/sfx';
 import { ARENA_W, ARENA_D } from '../render/scene';
+import { cylGeo } from '../render/geocache';
 
 // Runtime for the 8 launch ultimates (DESIGN.md §5.5).
 // Every ultimate is a set piece: it owns the screen while it runs.
@@ -15,7 +16,15 @@ type Active =
   | { kind: 'gravelight'; orb: THREE.Group; pos: THREE.Vector3; dir: THREE.Vector3; zapT: number }
   | { kind: 'quiet-word'; t: number; waveR: number; bossHit: boolean }
   | { kind: 'red-choir'; t: number }
-  | { kind: 'deadhand'; t: number; strikes: number; strikeT: number }
+  | {
+      kind: 'deadhand';
+      phase: 'frame' | 'fire';
+      t: number;
+      marks: { e: Enemy | null; pos: THREE.Vector3; el: HTMLDivElement }[];
+      fired: number;
+      missiles: { mesh: THREE.Mesh; from: THREE.Vector3; target: THREE.Vector3; t: number; mark: number }[];
+      frameEl: HTMLDivElement;
+    }
   | { kind: 'waltz'; targets: Enemy[]; idx: number; t: number }
   | { kind: 'grasp'; phase: 'pull' | 'crush'; t: number; mesh: THREE.Group; center: THREE.Vector3; tickT: number }
   | { kind: 'casket'; mesh: BuiltMesh; pos: THREE.Vector3; t: number; hp: number; fireCd: number; landT: number }
@@ -48,6 +57,44 @@ export class UltimateRunner {
     return this.g.ultPotencyMult;
   }
   private rand = () => this.g.rng.next();
+
+  /** one missile lands: the bracketed target dies, the deck answers */
+  private strikeImpact(mark: { e: Enemy | null; pos: THREE.Vector3; el: HTMLDivElement }) {
+    const g = this.g;
+    mark.el.remove();
+    const p = mark.pos.clone().setY(0.3);
+    sfx.explosion();
+    g.stage.addShake(0.45);
+    g.stage.ring(mark.pos, 3.2, 0xff8a3a, 0.35);
+    g.particles.explosion(p, 1.7);
+    g.particles.fire(p, 8, 1.8);
+    g.particles.sparks(p, 7, undefined, 1.6);
+    g.particles.puff(p.clone().setY(0.9), 3, { size: 1.3, dark: true, life: 1.8 });
+    g.gore.scorch(mark.pos.x, mark.pos.z, this.rand, 1.8);
+    this.igniteOil(mark.pos.x, mark.pos.z, 2.4, 5);
+    const l = g.stage.lendLight(0xffa050, 90, 14);
+    if (l) {
+      l.position.set(mark.pos.x, 1.6, mark.pos.z);
+      setTimeout(() => g.stage.releaseLight(l), 280);
+    }
+    if (this.rand() < 0.5) {
+      g.stage.vents.push({ pos: p.clone().setY(0.25), kind: 'smoke', rate: 3.5, ttl: 5 });
+    }
+    // the marked one dies; anything crowding it burns too
+    for (const e of [...g.enemies]) {
+      if (e.state === 'spawn') continue;
+      const d = e.pos.distanceTo(mark.pos);
+      if (e === mark.e || d < 0.6) {
+        if (e.def.behavior === 'boss') g.damageEnemy(e, e.maxHp * 0.25, 'ult');
+        else g.damageEnemy(e, e.hp + 1, 'ult', { vaporize: true });
+      } else if (d < 2.4) {
+        g.damageEnemy(e, 45 * this.mult, 'ult');
+      }
+    }
+    for (const dd of [...g.destructibles]) {
+      if (dd.pos.distanceTo(mark.pos) < 2.4) g.damageDestructible(dd, 999);
+    }
+  }
 
   /**
    * torch every oil slick within `r` (flood-fills through touching decals).
@@ -115,10 +162,16 @@ export class UltimateRunner {
         break;
       }
       case 'deadhand': {
+        // uplink: a targeting frame sweeps out from the center of the SCREEN,
+        // stamps a bracket on every hostile, then one missile answers each
         sfx.klaxon();
         g.stage.ring(g.playerPos, 26, 0xff3020, 1.5);
-        g.stage.setMood(0x38100a, 0.6, 1.5);
-        this.a = { kind: 'deadhand', t: 1.5, strikes: 0, strikeT: 0 };
+        g.stage.setMood(0x38100a, 0.6, 1.2);
+        const frameEl = document.createElement('div');
+        frameEl.className = 'strike-frame';
+        document.getElementById('app')!.appendChild(frameEl);
+        setTimeout(() => frameEl.classList.add('expanded'), 30);
+        this.a = { kind: 'deadhand', phase: 'frame', t: 0.7, marks: [], fired: 0, missiles: [], frameEl };
         break;
       }
       case 'waltz': {
@@ -204,6 +257,11 @@ export class UltimateRunner {
     this.orbLight = null;
     if (this.a.kind === 'gravelight') g.stage.scene.remove(this.a.orb);
     if (this.a.kind === 'grasp') g.stage.scene.remove(this.a.mesh);
+    if (this.a.kind === 'deadhand') {
+      this.a.frameEl.remove();
+      for (const m of this.a.marks) m.el.remove();
+      for (const mi of this.a.missiles) g.stage.scene.remove(mi.mesh);
+    }
     if (this.a.kind === 'casket') {
       g.stage.scene.remove(this.a.mesh.root);
       g.tauntPos = null;
@@ -313,74 +371,83 @@ export class UltimateRunner {
       }
 
       case 'deadhand': {
-        // ---- aftershock barrage: staggered explosions hammer the arena ----
-        // (each strike also torches any oil slick it lands near)
-        if (a.strikes > 0) {
-          a.strikeT -= dt;
-          g.stage.addShake(0.35); // the ground does not stop moving
-          if (a.strikeT <= 0) {
-            a.strikeT = 0.09;
-            a.strikes--;
-            const sx = this.rand() * (ARENA_W - 4) - HALF_W + 2;
-            const sz = this.rand() * (ARENA_D - 3) - HALF_D + 1.5;
-            const sp = new THREE.Vector3(sx, 0.3, sz);
-            sfx.explosion();
-            g.stage.addShake(0.5);
-            g.stage.ring(sp, 3.5, 0xff8a3a, 0.35);
-            g.particles.explosion(sp, 1.8); // the pack's detonation flipbook
-            g.particles.fire(sp, 9, 2.0);
-            g.particles.sparks(sp, 8, undefined, 1.8);
-            g.particles.puff(sp.clone().setY(0.9), 3, { size: 1.4, dark: true, life: 2 });
-            g.particles.ember(sp, 3);
-            g.gore.scorch(sx, sz, this.rand, 2.0);
-            this.igniteOil(sx, sz, 2.6, 6);
-            // each blast floods its corner of the room with light
-            const l = g.stage.lendLight(0xffa050, 90, 16);
-            if (l) {
-              l.position.set(sx, 1.6, sz);
-              setTimeout(() => g.stage.releaseLight(l), 300);
+        // brackets ride their targets in screen space
+        for (const m of a.marks) {
+          if (m.e && m.e.hp > 0 && g.enemies.includes(m.e)) m.pos.copy(m.e.pos);
+          const s = g.stage.toScreen(m.pos.x, 0.9, m.pos.z);
+          m.el.style.left = `${s.x}px`;
+          m.el.style.top = `${s.y}px`;
+        }
+
+        if (a.phase === 'frame') {
+          // ---- the targeting frame sweeps out from the screen center ----
+          a.t -= dt;
+          g.stage.addShake(dt * 0.5);
+          if (a.t <= 0) {
+            a.frameEl.classList.add('locked');
+            const app = document.getElementById('app')!;
+            for (const e of g.enemies) {
+              if (e.state === 'spawn') continue;
+              const el = document.createElement('div');
+              el.className = 'strike-mark';
+              app.appendChild(el);
+              a.marks.push({ e, pos: e.pos.clone(), el });
             }
-            if (a.strikes === 0) {
-              // the strike leaves the arena smoking for a long moment
-              for (let i = 0; i < 10; i++) {
-                g.stage.vents.push({
-                  pos: new THREE.Vector3(this.rand() * (ARENA_W - 4) - HALF_W + 2, 0.25, this.rand() * (ARENA_D - 3) - HALF_D + 1.5),
-                  kind: 'smoke',
-                  rate: 3.5,
-                  ttl: 8,
+            if (a.marks.length === 0) {
+              // no targets — a few blind strikes so the sky still answers
+              for (let i = 0; i < 4; i++) {
+                a.marks.push({
+                  e: null,
+                  pos: new THREE.Vector3(
+                    this.rand() * (ARENA_W - 6) - HALF_W + 3,
+                    0,
+                    this.rand() * (ARENA_D - 6) - HALF_D + 3,
+                  ),
+                  el: document.createElement('div'), // never attached
                 });
               }
-              this.a = null;
             }
+            sfx.ready();
+            a.phase = 'fire';
+            a.t = 0.35;
           }
           break;
         }
-        // ---- klaxon countdown ----
+
+        // ---- fire: one missile per bracket, staggered ----
         a.t -= dt;
-        g.stage.addShake(dt * 0.7); // the deck trembles while the klaxon counts
-        if (a.t <= 0) {
-          sfx.nuke();
-          g.stage.addShake(1);
-          g.stage.setScorched(true);
-          g.stage.setMood(0xffd8b0, 1.3, 0.8); // the blast floods the arena with light
-          this.igniteOil(0, 0, 999, 24); // orbital fire cooks off every slick at once
-          for (const e of [...g.enemies]) {
-            if (e.def.behavior === 'boss') {
-              g.damageEnemy(e, e.maxHp * 0.25, 'ult');
-            } else {
-              g.damageEnemy(e, e.hp + 1, 'ult', { vaporize: true });
-            }
+        if (a.t <= 0 && a.fired < a.marks.length) {
+          const m = a.marks[a.fired];
+          const from = new THREE.Vector3(m.pos.x + (this.rand() - 0.5) * 2, 15, m.pos.z - 3);
+          const mesh = new THREE.Mesh(
+            cylGeo(0.06, 0.13, 1.3, 6),
+            new THREE.MeshBasicMaterial({ color: 0xffd9a0 }),
+          );
+          mesh.position.copy(from);
+          mesh.lookAt(m.pos.x, 0, m.pos.z);
+          mesh.rotateX(Math.PI / 2); // cylinder axis onto the flight line
+          g.stage.scene.add(mesh);
+          a.missiles.push({ mesh, from, target: m.pos.clone(), t: 0.16, mark: a.fired });
+          sfx.mortarShot();
+          a.fired++;
+          a.t = 0.12;
+        }
+        for (let i = a.missiles.length - 1; i >= 0; i--) {
+          const mi = a.missiles[i];
+          mi.t -= dt;
+          const k = 1 - Math.max(0, mi.t) / 0.16;
+          mi.mesh.position.lerpVectors(mi.from, mi.target, k);
+          if (this.rand() < 0.6) g.particles.fire(mi.mesh.position, 1, 0.5);
+          if (mi.t <= 0) {
+            g.stage.scene.remove(mi.mesh);
+            this.strikeImpact(a.marks[mi.mark]);
+            a.missiles.splice(i, 1);
           }
-          // nothing breakable survives an orbital strike
-          for (const d of [...g.destructibles]) g.damageDestructible(d, 999);
-          for (let i = 0; i < 22; i++) {
-            const sx = this.rand() * ARENA_W - HALF_W;
-            const sz = this.rand() * ARENA_D - HALF_D;
-            g.gore.scorch(sx, sz, this.rand, 1.8);
-            g.particles.ember(new THREE.Vector3(sx, 0.3, sz), 2);
-          }
-          a.strikes = 12; // the barrage begins
-          a.strikeT = 0.05;
+        }
+        if (a.fired >= a.marks.length && a.missiles.length === 0) {
+          for (const m of a.marks) m.el.remove();
+          a.frameEl.remove();
+          this.a = null;
         }
         break;
       }
