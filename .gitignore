@@ -1,0 +1,9 @@
+node_modules/
+dist/
+shots/
+
+# source asset packs (2.5 GB) — only the staged copies in public/ ship
+resources/
+
+# local tooling/session config
+.claude/
