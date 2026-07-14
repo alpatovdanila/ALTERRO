@@ -23,6 +23,9 @@ export class Input {
   private padIndex: number | null = null;
   /** diagnostics: what the game currently sees */
   padId: string | null = null;
+  /** last axis snapshot per pad — "alive" means MOVED, not merely off-center
+   * (wheel pedals rest pinned at ±1 and must never steal the lock) */
+  private padAxesPrev = new Map<number, number[]>();
 
   constructor() {
     window.addEventListener('keydown', (e) => {
@@ -55,11 +58,12 @@ export class Input {
     for (const p of pads) {
       if (!p || !p.connected) continue;
       fallback = fallback ?? p;
-      const alive =
-        p.buttons.some((b) => b && b.pressed) || p.axes.some((a) => Math.abs(a) > 0.3);
+      const prev = this.padAxesPrev.get(p.index);
+      const moved = prev ? p.axes.some((a, i) => Math.abs(a - (prev[i] ?? 0)) > 0.08) : false;
+      this.padAxesPrev.set(p.index, [...p.axes]);
+      const alive = p.buttons.some((b) => b && b.pressed) || moved;
       if (alive && p !== gp) {
-        gp = p; // this one is actually being held
-        break;
+        gp = p; // this one is actually being handled RIGHT NOW
       }
     }
     gp = gp ?? fallback;
