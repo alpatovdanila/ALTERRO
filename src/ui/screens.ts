@@ -131,12 +131,13 @@ export function showWheel(cards: CardDef[], tier: number, onPick: (c: CardDef) =
   }
 }
 
-/** Esc pause menu: resume, music toggle, restart the current hall */
+/** Esc pause menu: resume, music toggle, restart the current hall, quit to menu */
 export function showPause(
   musicOn: boolean,
   onToggleMusic: () => boolean,
   onRestart: () => void,
   onResume: () => void,
+  onQuit: () => void,
 ) {
   const el = screen();
   el.innerHTML = `
@@ -145,6 +146,7 @@ export function showPause(
       <button class="btn" id="resume-btn">ПРОДОЛЖИТЬ</button>
       <button class="btn" id="music-btn">МУЗЫКА: ${musicOn ? 'ВКЛ' : 'ВЫКЛ'}</button>
       <button class="btn" id="restart-btn">НАЧАТЬ ЗАЛ ЗАНОВО</button>
+      <button class="btn" id="quit-btn">В ГЛАВНОЕ МЕНЮ</button>
     </div>
   `;
   el.querySelector('#music-btn')!.addEventListener('click', () => {
@@ -154,6 +156,7 @@ export function showPause(
   });
   el.querySelector('#restart-btn')!.addEventListener('click', onRestart);
   el.querySelector('#resume-btn')!.addEventListener('click', onResume);
+  el.querySelector('#quit-btn')!.addEventListener('click', onQuit);
 }
 
 /** the fall: one paid return per run (free for now), or the long walk back */

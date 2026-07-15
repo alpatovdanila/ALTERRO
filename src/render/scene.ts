@@ -200,6 +200,12 @@ export class Stage {
   menuFocus: THREE.Vector3 | null = null;
   /** smoothed camera focus — follows the player down the long rooms */
   private camFocusZ = ARENA_D / 2 - 5;
+  /** extra camera height (Overload pulls the view back a bit), smoothed */
+  private camLift = 0;
+  private camLiftTarget = 0;
+  setCamLift(v: number) {
+    this.camLiftTarget = v;
+  }
 
   constructor(host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -1132,9 +1138,10 @@ export class Stage {
     const AHEAD = 4;
     const focusTarget = THREE.MathUtils.clamp(playerZ - AHEAD, -ARENA_D / 2 + 3.5, ARENA_D / 2 - 5);
     this.camFocusZ += (focusTarget - this.camFocusZ) * Math.min(1, dt * 4.5);
+    this.camLift += (this.camLiftTarget - this.camLift) * Math.min(1, dt * 3);
     this.camera.position.set(
       this.camBase.x + camX + (Math.random() - 0.5) * sh * 1.0,
-      this.camBase.y + (Math.random() - 0.5) * sh * 0.8,
+      this.camBase.y + this.camLift + (Math.random() - 0.5) * sh * 0.8,
       this.camBase.z + this.camFocusZ + AHEAD + (Math.random() - 0.5) * sh * 0.6,
     );
     this.camera.lookAt(tmpV.set(camX, 0, this.camFocusZ));

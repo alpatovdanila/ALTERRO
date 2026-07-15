@@ -201,6 +201,7 @@ export class Game {
   private resDropT = 0;
   private resShieldT = 0;
   private shieldMesh!: THREE.Mesh;
+  private overloadGlow!: THREE.Mesh;
   private hurtCdT = 0;
   private stepT = 0;
   moving = false;
@@ -294,6 +295,21 @@ export class Game {
     this.shieldMesh.layers.set(FX_LAYER); // additive glow — AO must not touch it
     this.shieldMesh.visible = false;
     this.playerMesh.root.add(this.shieldMesh);
+    // Overload aura — electric blue halo while the relic runs hot
+    this.overloadGlow = new THREE.Mesh(
+      sphereGeo(1.15, 18, 14),
+      new THREE.MeshBasicMaterial({
+        color: 0x4aa0ff,
+        transparent: true,
+        opacity: 0.28,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    this.overloadGlow.position.y = 0.9;
+    this.overloadGlow.layers.set(FX_LAYER);
+    this.overloadGlow.visible = false;
+    this.playerMesh.root.add(this.overloadGlow);
     this.ultRunner = new UltimateRunner(this);
     this.loadRoom(1);
   }
@@ -1245,6 +1261,8 @@ export class Game {
         this.particles.electric(this.playerPos.clone().setY(0.9 + this.rng.next()), 1, 0x4aa0ff);
       }
     }
+    // pull the camera up an extra 5m while Overload is running (0 otherwise)
+    this.stage.setCamLift(this.overloadT > 0 ? 5 : 0);
 
     this.updateVents(dt);
     this.ambientSparkT -= dt;
@@ -1312,8 +1330,8 @@ export class Game {
       const target = this.nearestVisibleEnemy(this.playerPos);
       if (target) {
         this.firePlayerVolley(target);
-        // Overload: 400 RPM (6.67/s) — never slower than the built-up fire rate
-        const rof = this.overloadT > 0 ? Math.max(this.stats.fireRate, 400 / 60) : this.stats.fireRate;
+        // Overload: 800 RPM (13.3/s) — never slower than the built-up fire rate
+        const rof = this.overloadT > 0 ? Math.max(this.stats.fireRate, 800 / 60) : this.stats.fireRate;
         this.fireCd = 1 / rof;
       }
     }
@@ -2080,6 +2098,22 @@ export class Game {
       const sm = this.shieldMesh.material as THREE.MeshBasicMaterial;
       sm.opacity = 0.16 + Math.sin(this.stats2.timeSec * 9) * 0.07;
       this.shieldMesh.scale.setScalar(1 + Math.sin(this.stats2.timeSec * 5) * 0.05);
+    }
+
+    // Overload aura: solid blue glow while hot, hard flashing in the final 3
+    // seconds, gone the instant the ult ends
+    const glowOn = this.overloadT > 0;
+    this.overloadGlow.visible = glowOn;
+    if (glowOn) {
+      const gm = this.overloadGlow.material as THREE.MeshBasicMaterial;
+      if (this.overloadT <= 3) {
+        // warning flash — square-ish blink, accelerating as it runs out
+        const rate = 8 + (3 - this.overloadT) * 4;
+        gm.opacity = Math.sin(this.stats2.timeSec * rate) > 0 ? 0.42 : 0.05;
+      } else {
+        gm.opacity = 0.26 + Math.sin(this.stats2.timeSec * 6) * 0.08;
+      }
+      this.overloadGlow.scale.setScalar(1 + Math.sin(this.stats2.timeSec * 7) * 0.06);
     }
     const targetRot = this.facing;
     let dr = targetRot - pm.rotation.y;

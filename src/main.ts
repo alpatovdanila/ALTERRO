@@ -397,6 +397,12 @@ function togglePauseMenu() {
       g.paused = false;
     },
     closePauseMenu,
+    () => {
+      // abandon the run and return to the reliquary
+      menuOpen = false;
+      sfx.setMusicMode('normal');
+      backToRelicSelect();
+    },
   );
 }
 
