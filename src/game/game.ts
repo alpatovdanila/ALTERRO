@@ -29,6 +29,43 @@ const HALF_D = ARENA_D / 2;
 // loop stops allocating a Vector3 per enemy per frame (~840/s in a full room)
 const chaseDir = new THREE.Vector3();
 
+/**
+ * A triangular-lattice "force field" texture: thin bright lines on a fully
+ * transparent field. Mapped onto an additive sphere it leaves the body visible
+ * through the gaps and only the mesh-lines glow — so the shield/aura reads as a
+ * textured energy shell, not a flat translucent ball. One shared upload.
+ */
+function makeEnergyTex(): THREE.CanvasTexture {
+  const N = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = N;
+  const g = cv.getContext('2d')!;
+  g.clearRect(0, 0, N, N);
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 2.4;
+  const spacing = 30;
+  // three line families 60° apart weave the triangular mesh
+  for (const deg of [0, 60, 120]) {
+    g.save();
+    g.translate(N / 2, N / 2);
+    g.rotate((deg * Math.PI) / 180);
+    g.translate(-N / 2, -N / 2);
+    for (let y = -N; y <= 2 * N; y += spacing) {
+      g.beginPath();
+      g.moveTo(-N, y);
+      g.lineTo(2 * N, y);
+      g.stroke();
+    }
+    g.restore();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 2);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const ENERGY_TEX = makeEnergyTex();
+
 export type EnemyState =
   | 'spawn'
   | 'chase'
@@ -98,6 +135,8 @@ interface Projectile {
   burnDps: number;
   mesh: THREE.Object3D;
   life: number;
+  /** Overload bolts punch through cover and breakables — nothing stops them */
+  pierceObstacles?: boolean;
   /** collision radius vs the player (mortars are big and dodgeable) */
   hitRadius: number;
   /** borrowed from the stage's light pool; returned on death */
@@ -141,6 +180,8 @@ export interface GameEvents {
   onDeath(): void;
   onVictory(): void;
   onRoomExit(): void;
+  /** a transient center banner from the sim (e.g. the strike found no targets) */
+  onNotify(text: string, sub?: string): void;
 }
 
 export interface RunStats {
@@ -288,8 +329,9 @@ export class Game {
       sphereGeo(1.05, 18, 14),
       new THREE.MeshBasicMaterial({
         color: 0xf0d27a,
+        map: ENERGY_TEX, // glowing mesh-lines only — the body shows through
         transparent: true,
-        opacity: 0.2,
+        opacity: 0.55,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       }),
@@ -303,8 +345,9 @@ export class Game {
       sphereGeo(1.15, 18, 14),
       new THREE.MeshBasicMaterial({
         color: 0x4aa0ff,
+        map: ENERGY_TEX, // same energy weave, cobalt-tinted
         transparent: true,
-        opacity: 0.28,
+        opacity: 0.6,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       }),
@@ -1043,6 +1086,7 @@ export class Game {
           burnDps: overload ? 0 : this.stats.burnDps,
           mesh,
           life: 2.2,
+          pierceObstacles: overload, // Overload shoots through everything
           hitRadius: 0.5,
           light: this.stage.lendLight(overload ? 0x4aa0ff : 0xffb054, 6, 5), // pooled — constant scene light count
         });
@@ -1273,8 +1317,8 @@ export class Game {
         this.particles.electric(this.playerPos.clone().setY(0.9 + this.rng.next()), 1, 0x4aa0ff);
       }
     }
-    // pull the camera up an extra 5m while Overload is running (0 otherwise)
-    this.stage.setCamLift(this.overloadT > 0 ? 5 : 0);
+    // pull the camera up an extra 10m while Overload OR the orbital strike runs
+    this.stage.setCamLift(Math.max(this.overloadT > 0 ? 10 : 0, this.ultRunner.camLift));
 
     this.updateVents(dt);
     this.ambientSparkT -= dt;
@@ -1339,7 +1383,10 @@ export class Game {
     this.fireCd -= dt;
     const canFire = (!this.moving || this.trait === 'runandgun') && !locked;
     if (canFire && this.fireCd <= 0) {
-      const target = this.nearestVisibleEnemy(this.playerPos);
+      // Overload sees and shoots through cover — LOS no longer matters
+      const target = this.overloadT > 0
+        ? this.nearestEnemy(this.playerPos)
+        : this.nearestVisibleEnemy(this.playerPos);
       if (target) {
         this.firePlayerVolley(target);
         // Overload: a FIXED 800 RPM — ROF upgrades do not stack with it
@@ -1891,17 +1938,20 @@ export class Game {
       const p = this.projectiles[i];
       p.life -= dt;
       p.pos.addScaledVector(p.vel, dt);
-      // breakables take the hit before generic cover does
-      for (const d of this.destructibles) {
-        if (p.pos.distanceTo(d.pos) < d.r + 0.15) {
-          this.damageDestructible(d, p.damage);
-          p.life = -1;
-          break;
+      // breakables take the hit before generic cover does — but Overload bolts
+      // pass through them (and every crate) untouched
+      if (!p.pierceObstacles) {
+        for (const d of this.destructibles) {
+          if (p.pos.distanceTo(d.pos) < d.r + 0.15) {
+            this.damageDestructible(d, p.damage);
+            p.life = -1;
+            break;
+          }
         }
       }
       let dead = p.life <= 0 ||
         Math.abs(p.pos.x) > HALF_W - 0.2 || Math.abs(p.pos.z) > HALF_D - 0.2 ||
-        this.hitsObstacle(p.pos); // crates are cover — for BOTH sides, fair is fun
+        (!p.pierceObstacles && this.hitsObstacle(p.pos)); // crates are cover — for BOTH sides, fair is fun
 
       if (!dead && (p.fromPlayer || p.targetEnemies)) {
         for (const e of this.enemies) {
@@ -2108,8 +2158,9 @@ export class Game {
     this.shieldMesh.visible = this.resDropT <= 0 && this.resShieldT > 0;
     if (this.shieldMesh.visible) {
       const sm = this.shieldMesh.material as THREE.MeshBasicMaterial;
-      sm.opacity = 0.16 + Math.sin(this.stats2.timeSec * 9) * 0.07;
+      sm.opacity = 0.5 + Math.sin(this.stats2.timeSec * 9) * 0.18;
       this.shieldMesh.scale.setScalar(1 + Math.sin(this.stats2.timeSec * 5) * 0.05);
+      this.shieldMesh.rotation.y += dt * 0.5; // the weave drifts — never a static ball
     }
 
     // Overload aura: solid blue glow while hot, hard flashing in the final 3
@@ -2121,11 +2172,12 @@ export class Game {
       if (this.overloadT <= 3) {
         // warning flash — square-ish blink, accelerating as it runs out
         const rate = 8 + (3 - this.overloadT) * 4;
-        gm.opacity = Math.sin(this.stats2.timeSec * rate) > 0 ? 0.42 : 0.05;
+        gm.opacity = Math.sin(this.stats2.timeSec * rate) > 0 ? 0.78 : 0.14;
       } else {
-        gm.opacity = 0.26 + Math.sin(this.stats2.timeSec * 6) * 0.08;
+        gm.opacity = 0.55 + Math.sin(this.stats2.timeSec * 6) * 0.16;
       }
       this.overloadGlow.scale.setScalar(1 + Math.sin(this.stats2.timeSec * 7) * 0.06);
+      this.overloadGlow.rotation.y += dt * 0.9; // energy weave spins while hot
     }
     const targetRot = this.facing;
     let dr = targetRot - pm.rotation.y;

@@ -83,10 +83,10 @@ export const CARDS: CardDef[] = [
   {
     id: 'plate',
     name: 'Освящённая броня',
-    desc: '+20 макс. здоровья. Лечит 25.',
+    desc: '+20 макс. здоровья. Исцеляет полностью.',
     flavor: 'The armor remembers every wound it closed.',
     rarity: 'common',
-    apply: (c) => { c.stats.maxHp += 20; c.heal(25); },
+    apply: (c) => { c.stats.maxHp += 20; c.heal(99999); },
   },
   {
     id: 'whetted',

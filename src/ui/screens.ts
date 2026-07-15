@@ -4,6 +4,7 @@ import { sfx } from '../core/sfx';
 import { ULTIMATES, type UltimateDef, chargeLabel } from '../data/ultimates';
 import { TRAITS, type TraitId } from '../data/traits';
 import type { RunStats } from '../game/game';
+import { kbd, padBtn } from './glyphs';
 
 // Modal screens: reliquary (start / ultimate select), the Rite Wheel,
 // death, victory. Pure DOM — the 3D scene keeps rendering underneath.
@@ -33,6 +34,8 @@ export function showStart(
 ) {
   const el = screen();
   el.classList.add('reliquary'); // menu shifts right; the hero owns the left
+  // cheats are for the dev server or an explicit ?cheats — hidden in the wild
+  const showCheats = import.meta.env.DEV || new URLSearchParams(location.search).has('cheats');
   el.innerHTML = `
     <div class="title">ALTERRO</div>
     <div class="subtitle">АКТ 1 — НЕЗАПЛАНИРОВАННОЕ ВТОРЖЕНИЕ</div>
@@ -41,17 +44,21 @@ export function showStart(
     <div class="screen-head">ВЫБЕРИ УМЕНИЕ</div>
     <div class="card-row" id="trait-row"></div>
     <button class="btn" id="begin-btn" disabled>НАЧАТЬ СПУСК</button>
+    ${showCheats ? `
     <label class="cheat-toggle" id="cheat-ult">
       <input type="checkbox" ${cheats.fullUlt ? 'checked' : ''} />
       <span>ЧИТ: УЛЬТА ВСЕГДА ГОТОВА</span>
-    </label>
-    <div class="hint-line">
-      WASD — ДВИЖЕНИЕ &nbsp;·&nbsp; СТОЙ НА МЕСТЕ — ОГОНЬ &nbsp;·&nbsp; ПРОБЕЛ — УЛЬТА, КОГДА КОЛЬЦО ГОРИТ<br/>
-      ГЕЙМПАД: СТИК — ДВИЖЕНИЕ &nbsp;·&nbsp; A / RT — УЛЬТА &nbsp;·&nbsp; START — ПАУЗА
+    </label>` : ''}
+    <div class="hint-line kb-line">
+      WASD — ДВИЖЕНИЕ &nbsp;·&nbsp; СТОЙ НА МЕСТЕ — ОГОНЬ &nbsp;·&nbsp; ${kbd('ПРОБЕЛ', true)} — УЛЬТА, КОГДА КОЛЬЦО ГОРИТ
+    </div>
+    <div class="hint-line gp-line">
+      СТИК — ДВИЖЕНИЕ &nbsp;·&nbsp; ${padBtn('A')} / RT — УЛЬТА &nbsp;·&nbsp; START — ПАУЗА<br/>
+      ${padBtn('A')} — ВЫБОР
     </div>
   `;
-  const cheatBox = el.querySelector('#cheat-ult input') as HTMLInputElement;
-  cheatBox.addEventListener('change', () => {
+  const cheatBox = el.querySelector('#cheat-ult input') as HTMLInputElement | null;
+  cheatBox?.addEventListener('change', () => {
     cheats.fullUlt = cheatBox.checked;
     sfx.uiSelect();
   });
@@ -112,7 +119,8 @@ export function showWheel(cards: CardDef[], onPick: (c: CardDef) => void) {
   el.innerHTML = `
     <div class="screen-head">НОВЫЙ УРОВЕНЬ — НОВАЯ СПОСОБНОСТЬ</div>
     <div class="card-row" id="wheel-row"></div>
-    <div class="hint-line">1 / 2 / 3 — ВЫБОР С КЛАВИАТУРЫ</div>
+    <div class="hint-line kb-line">${kbd('1')} / ${kbd('2')} / ${kbd('3')} — ВЫБОР</div>
+    <div class="hint-line gp-line">${padBtn('A')} — ВЫБОР &nbsp;·&nbsp; СТИК — НАВИГАЦИЯ</div>
   `;
   const row = el.querySelector('#wheel-row')!;
   const chosen: (() => void)[] = [];
@@ -167,6 +175,7 @@ export function showPause(
       <button class="btn" id="restart-btn">НАЧАТЬ ЗАЛ ЗАНОВО</button>
       <button class="btn" id="quit-btn">В ГЛАВНОЕ МЕНЮ</button>
     </div>
+    <div class="hint-line gp-line">${padBtn('A')} — ОК &nbsp;·&nbsp; ${padBtn('B')} — НАЗАД &nbsp;·&nbsp; СТИК — ВЫБОР</div>
   `;
   el.querySelector('#music-btn')!.addEventListener('click', () => {
     sfx.uiSelect();
@@ -197,6 +206,7 @@ export function showDeath(
       ${canResurrect ? '<button class="btn" id="res-btn">ВОССТАТЬ (ПОКА БЕСПЛАТНО)</button>' : ''}
       <button class="btn" id="surrender-btn">СДАТЬСЯ</button>
     </div>
+    <div class="hint-line gp-line">${padBtn('A')} — ОК &nbsp;·&nbsp; СТИК — ВЫБОР</div>
   `;
   el.querySelector('#res-btn')?.addEventListener('click', onResurrect);
   el.querySelector('#surrender-btn')!.addEventListener('click', onSurrender);
@@ -215,6 +225,7 @@ export function showVictory(stats: RunStats, onRestart: () => void, onRelic: () 
       <button class="btn" id="restart-btn">СПУСТИТЬСЯ ВНОВЬ</button>
       <button class="btn" id="relic-btn">СМЕНИТЬ РЕЛИКВИЮ</button>
     </div>
+    <div class="hint-line gp-line">${padBtn('A')} — ОК &nbsp;·&nbsp; СТИК — ВЫБОР</div>
   `;
   el.querySelector('#restart-btn')!.addEventListener('click', onRestart);
   el.querySelector('#relic-btn')!.addEventListener('click', onRelic);

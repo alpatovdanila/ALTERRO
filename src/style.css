@@ -65,11 +65,21 @@ html, body, #app {
 .strike-frame.locked { opacity: 0; }
 .strike-mark {
   position: absolute; z-index: 36; pointer-events: none;
-  width: 28px; height: 28px; margin: -14px 0 0 -14px;
-  border: 2px solid var(--ember);
-  box-shadow: 0 0 10px rgba(255, 123, 28, 0.8), inset 0 0 8px rgba(255, 123, 28, 0.35);
+  width: 65px; height: 73px; margin: -36px 0 0 -32px;
+  border: 5px solid var(--ember);
+  box-shadow: 0 0 16px rgba(255, 123, 28, 0.9), inset 0 0 14px rgba(255, 123, 28, 0.45);
   animation: mark-pop 0.16s ease-out;
 }
+/* diagonal reticle lines crossing the locked target — a hard "acquired" X */
+.strike-mark::before, .strike-mark::after {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 150%; height: 3px; margin: -1.5px 0 0 -75%;
+  background: var(--ember); transform-origin: center;
+  box-shadow: 0 0 7px rgba(255, 123, 28, 0.85);
+  opacity: 0.75;
+}
+.strike-mark::before { transform: rotate(45deg); }
+.strike-mark::after { transform: rotate(-45deg); }
 @keyframes mark-pop {
   0% { scale: 2.6; opacity: 0; }
   100% { scale: 1; opacity: 1; }
@@ -92,10 +102,18 @@ html, body, #app {
   position: absolute; top: 30%; left: 50%;
   transform: translate(-50%, -50%);
   z-index: 34; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center;
   font-family: var(--font-display);
   font-size: 58px; letter-spacing: 6px; color: var(--bone);
   text-shadow: 4px 4px 0 #000, 0 0 34px rgba(154, 20, 20, 0.9);
-  opacity: 0; white-space: nowrap;
+  opacity: 0; white-space: nowrap; text-align: center;
+}
+/* a smaller centered hint sitting under the big announcement line */
+#announce .ann-sub {
+  margin-top: 16px;
+  font-size: 18px; letter-spacing: 3px; color: var(--bone);
+  text-shadow: 2px 2px 0 #000;
+  display: flex; align-items: center; gap: 9px;
 }
 #announce.show {
   animation: announce-pop 1.6s ease-out forwards;
@@ -105,6 +123,21 @@ html, body, #app {
   12% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-1deg); }
   75% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -55%) scale(0.98) rotate(-1deg); }
+}
+
+/* ---------- Overload final-seconds countdown ---------- */
+#ult-timer {
+  position: absolute; top: 20%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 35; pointer-events: none;
+  font-family: var(--font-display);
+  font-size: 92px; letter-spacing: 4px; color: #bfe0ff;
+  text-shadow: 3px 3px 0 #000, 0 0 30px rgba(74, 160, 255, 0.95);
+}
+#ult-timer.tick { animation: ult-tick 0.5s ease-out; }
+@keyframes ult-tick {
+  0% { opacity: 0.2; transform: translate(-50%, -50%) scale(1.7); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0.85; transform: translate(-50%, -50%) scale(1); }
 }
 
 /* ---------- dev overlays: perf monitor (F3) + GTAO tuning (F4) ---------- */
@@ -214,6 +247,8 @@ html, body, #app {
   text-shadow: 2px 2px 0 #000;
   animation: hint-blink 1.2s steps(2) infinite;
 }
+/* the gamepad chip in the ring hint rides down to the small hint baseline */
+#dread-hint .gp-btn { width: 20px; height: 20px; font-size: 12px; vertical-align: -5px; }
 @keyframes hint-blink { 50% { opacity: 0.25; } }
 
 /* ---------- modal screens ---------- */
@@ -411,8 +446,47 @@ html, body, #app {
   font-family: var(--font-body); font-weight: 500;
   font-size: 15px; letter-spacing: 3px; color: #6a655a;
   text-shadow: 2px 2px 0 #000;
-  line-height: 2; text-align: center; text-transform: uppercase;
+  line-height: 2.2; text-align: center; text-transform: uppercase;
 }
+.hint-line .kbd, .hint-line .gp-btn { vertical-align: -3px; }
+
+/* ---------- input-mode-aware hints ----------
+   <body>.using-gamepad flips every hint from keyboard to controller. Inline
+   chips use .kb-only/.gp-only; whole lines use .kb-line/.gp-line. */
+.gp-only { display: none; }
+body.using-gamepad .kb-only { display: none; }
+body.using-gamepad .gp-only { display: inline; }
+.gp-line { display: none; }
+body.using-gamepad .kb-line { display: none; }
+body.using-gamepad .gp-line { display: block; }
+/* the number key-caps on the Rite Wheel are meaningless on a pad */
+body.using-gamepad .card .keycap { display: none; }
+
+/* keyboard key-cap chip (matches the wheel keycaps, but inline) */
+.kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 26px; padding: 0 8px;
+  font-family: var(--font-display); font-size: 14px; letter-spacing: 1px;
+  color: var(--bone); background: #2a2d34;
+  border-top: 2px solid #3f434c; border-left: 2px solid #3f434c;
+  border-bottom: 3px solid #0c0d10; border-right: 3px solid #0c0d10;
+  border-radius: 5px; box-shadow: 0 2px 0 #050506;
+  text-shadow: 1px 1px 0 #000;
+}
+.kbd-wide { min-width: 96px; }
+
+/* circled gamepad face button — Xbox livery */
+.gp-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  font-family: var(--font-display); font-size: 15px; color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+.gp-a { background: #3aa54a; }
+.gp-b { background: #d23a2a; }
+.gp-x { background: #2a6ad2; }
+.gp-y { background: #d2a72a; }
 
 /* debug cheat toggle */
 .cheat-toggle {

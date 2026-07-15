@@ -5,6 +5,9 @@ export class Input {
   private keys = new Set<string>();
   /** set true for one sim tick when the player slams Space / A / RT */
   ultimatePressed = false;
+  /** which device the player last actually TOUCHED — drives which button
+   * hints (keyboard vs gamepad) the UI shows. Starts on keyboard. */
+  lastInput: 'keyboard' | 'gamepad' = 'keyboard';
 
   // gamepad state (polled once per frame from the main loop)
   private padMove = { x: 0, z: 0 };
@@ -30,6 +33,7 @@ export class Input {
   constructor() {
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code);
+      this.lastInput = 'keyboard';
       if (e.code === 'Space' && !e.repeat) this.ultimatePressed = true;
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
         e.preventDefault();
@@ -37,6 +41,10 @@ export class Input {
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
+    // a mouse gesture on a menu counts as "playing on keyboard" — show kbd hints
+    window.addEventListener('pointerdown', () => {
+      this.lastInput = 'keyboard';
+    });
     // lock onto pads the browser announces (Chrome only lists a pad in
     // getGamepads() after this event has fired for it)
     window.addEventListener('gamepadconnected', (e) => {
@@ -86,6 +94,13 @@ export class Input {
     if (gp.buttons[13]?.pressed) z = 1;
     this.padMove.x = x;
     this.padMove.z = z;
+
+    // any REAL pad input (button or a real stick/d-pad push) means the player
+    // has both hands on the controller — swap the whole UI to gamepad hints.
+    // Merely being connected-but-idle must NOT flip it away from keyboard.
+    if (gp.buttons.some((b) => b && b.pressed) || Math.abs(x) > 0.25 || Math.abs(z) > 0.25) {
+      this.lastInput = 'gamepad';
+    }
 
     // ultimate: A (0) or right trigger (7), edge-triggered
     const ult = !!(gp.buttons[0]?.pressed || gp.buttons[7]?.pressed);

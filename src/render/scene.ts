@@ -119,6 +119,8 @@ interface Ring {
   mat: THREE.MeshBasicMaterial;
   /** live position to follow (e.g. the player) — read every frame */
   track?: THREE.Vector3;
+  /** implode inward instead of expanding outward */
+  converge?: boolean;
 }
 
 const tmpV = new THREE.Vector3();
@@ -1008,7 +1010,7 @@ export class Stage {
   private static ringGeo = new THREE.RingGeometry(0.9, 1, 48);
   private static skirtGeo = new THREE.PlaneGeometry(72, 84);
 
-  ring(pos: THREE.Vector3, maxR: number, color: number, dur: number, track?: THREE.Vector3) {
+  ring(pos: THREE.Vector3, maxR: number, color: number, dur: number, track?: THREE.Vector3, converge = false) {
     const mat = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -1022,7 +1024,7 @@ export class Stage {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(pos.x, 0.06, pos.z);
     this.scene.add(mesh);
-    this.rings.push({ mesh, t: 0, dur, maxR, mat, track });
+    this.rings.push({ mesh, t: 0, dur, maxR, mat, track, converge });
   }
 
   update(dt: number, playerX: number, playerZ = 0) {
@@ -1107,9 +1109,12 @@ export class Stage {
       r.t += dt;
       if (r.track) r.mesh.position.set(r.track.x, 0.06, r.track.z);
       const k = Math.min(1, r.t / r.dur);
-      const scale = 0.05 + k * r.maxR;
+      // converging rings implode from maxR to the center (activation "gather");
+      // the default expands from the center outward (impact "shockwave")
+      const scale = r.converge ? 0.05 + (1 - k) * r.maxR : 0.05 + k * r.maxR;
       r.mesh.scale.set(scale, scale, 1);
-      r.mat.opacity = 0.85 * (1 - k);
+      // converge stays bright as it collapses, then snaps out at the very end
+      r.mat.opacity = r.converge ? 0.85 * Math.min(1, (1 - k) * 4) : 0.85 * (1 - k);
       if (k >= 1) {
         this.scene.remove(r.mesh);
         this.rings.splice(i, 1);

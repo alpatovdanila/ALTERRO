@@ -53,6 +53,12 @@ export class UltimateRunner {
     return this.a?.kind === 'waltz';
   }
 
+  /** extra camera height a set piece wants — the orbital strike pulls back so
+   * the whole arena (and every target bracket) is in frame, like Overload */
+  get camLift(): number {
+    return this.a?.kind === 'deadhand' ? 10 : 0;
+  }
+
   private get mult(): number {
     return this.g.ultPotencyMult;
   }
@@ -122,7 +128,8 @@ export class UltimateRunner {
         g.overloadT = 10 + (g.ultTier - 1) * 2;
         g.stage.setMood(0x0a1c34, 0.6, 1.2); // a cold blue flash as it kicks in
         g.stage.addShake(0.5);
-        g.stage.ring(g.playerPos, 5, 0x4aa0ff, 0.6);
+        // the charge GATHERS: a wide ring collapses inward onto the crusader
+        g.stage.ring(g.playerPos, 7, 0x4aa0ff, 0.6, g.playerPos, true);
         g.particles.electric(g.playerPos.clone().setY(1), 12, 0x4aa0ff);
         sfx.ultLaunch();
         break;
@@ -405,18 +412,16 @@ export class UltimateRunner {
               a.marks.push({ e, pos: e.pos.clone(), el });
             }
             if (a.marks.length === 0) {
-              // no targets — a few blind strikes so the sky still answers
-              for (let i = 0; i < 4; i++) {
-                a.marks.push({
-                  e: null,
-                  pos: new THREE.Vector3(
-                    this.rand() * (ARENA_W - 6) - HALF_W + 3,
-                    0,
-                    this.rand() * (ARENA_D - 6) - HALF_D + 3,
-                  ),
-                  el: document.createElement('div'), // never attached
-                });
-              }
+              // nothing locked: the scan finds no targets. Refund most of the
+              // charge so a mistaken empty-room activation isn't a wasted ult —
+              // and drop the set piece so the camera settles back down.
+              g.events.onNotify('ЦЕЛИ НЕ НАЙДЕНЫ');
+              sfx.slamWarn();
+              g.ultCharge = g.ultChargeNeed * 0.75; // only 25% spent
+              g.stats2.ultUses = Math.max(0, g.stats2.ultUses - 1); // it never fired
+              a.frameEl.remove();
+              this.a = null;
+              break;
             }
             sfx.ready();
             a.phase = 'fire';

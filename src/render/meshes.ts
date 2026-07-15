@@ -134,12 +134,13 @@ export function buildPlayer(
   box(0.62, 0.52, 0.42, armor, 0, 0.26, 0, torso);
   box(0.4, 0.34, 0.06, dark, 0, 0.28, 0.22, torso); // chest plate inset
   box(0.12, 0.12, 0.04, trim, 0, 0.34, 0.26, torso); // aquila-ish emblem
-  // layered pauldrons — a hair deeper than the torso (0.42): sharing its
-  // exact front/back planes was a shoulder-seam z-fight
+  // layered pauldrons — bigger than the torso (0.62 × 0.42) and pushed outward
+  // so their front/back planes stand well proud of it: sharing a plane was the
+  // shoulder-seam z-fight, so nothing here is allowed to sit flush
   for (const sx of [-1, 1]) {
-    box(0.4, 0.3, 0.45, armor, sx * 0.48, 0.44, 0, torso);
-    box(0.42, 0.1, 0.47, trim, sx * 0.48, 0.6, 0, torso);
-    box(0.34, 0.16, 0.36, dark, sx * 0.44, 0.28, 0, torso);
+    box(0.48, 0.36, 0.54, armor, sx * 0.52, 0.46, 0, torso);
+    box(0.52, 0.12, 0.58, trim, sx * 0.52, 0.64, 0, torso);
+    box(0.38, 0.18, 0.42, dark, sx * 0.5, 0.3, 0, torso);
   }
   // arms angled forward to the bolter
   rig.armL = limb(dark, 0.09, 0.34, -0.48, 0.34, 0.06, torso);

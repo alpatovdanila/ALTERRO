@@ -87,6 +87,9 @@ function startRun(ult: UltimateDef, trait: TraitId) {
       sfx.winJingle();
       showVictory(game!.stats2, () => startRun(currentUlt!, currentTrait), backToRelicSelect);
     },
+    onNotify(text, sub) {
+      hud.announce(text, sub);
+    },
     onRoomExit() {
       const g = game!;
       if (g.paused) return;
@@ -231,6 +234,7 @@ if (import.meta.env.DEV) {
     },
     sfx,
     stage,
+    input,
     beginRun(id: string, trait: TraitId = 'twinbarrel') {
       const u = ULTIMATES.find((x) => x.id === id);
       if (u) startRun(u, trait);
@@ -445,7 +449,13 @@ function handleMenuGamepad() {
     focusables.forEach((el, i) => el.classList.toggle('gp-focus', i === idx));
     sfx.uiSelect();
   }
-  if (confirm && idx >= 0) focusables[idx].click();
+  if (confirm && idx >= 0) {
+    // A both confirms a menu AND arms the ultimate. When it's used to pick a
+    // card/button (which unpauses the game this same frame), swallow the ult
+    // edge so the selection doesn't also fire a charged ultimate.
+    input.consumeUltimate();
+    focusables[idx].click();
+  }
 }
 
 function frame(now: number) {
@@ -455,6 +465,8 @@ function frame(now: number) {
   last = now;
 
   input.pollGamepad();
+  // one body class drives every kbd-vs-gamepad hint in the CSS
+  document.body.classList.toggle('using-gamepad', input.lastInput === 'gamepad');
   if (input.consumeStart()) togglePauseMenu();
   handleMenuGamepad();
 
