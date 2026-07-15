@@ -987,7 +987,7 @@ export class Game {
     this.stage.scene.add(mesh);
     this.projectiles.push({
       pos: from.pos.clone().setY(0),
-      vel: dir.multiplyScalar(7.5),
+      vel: dir.multiplyScalar(6.98), // −7%: dodgeable by reading, not by luck
       damage: from.damage * (atEnemies ? 2 : 1),
       fromPlayer: false,
       targetEnemies: atEnemies,
