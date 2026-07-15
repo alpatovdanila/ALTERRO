@@ -364,9 +364,16 @@ export class Game {
     return this.bossRef;
   }
 
+  /** an ultimate is currently running (set piece OR the Overload buff) */
+  get ultActive(): boolean {
+    return this.ultRunner.active || this.overloadT > 0;
+  }
+
   addDread(points: number) {
     if (this.ultWindupT > 0) return;
-    this.ultCharge = Math.min(this.ultChargeNeed, this.ultCharge + points * (1 + this.ultChargeRateBonus));
+    // dread builds at HALF rate while an ult is running — no chaining/abuse
+    const rate = (1 + this.ultChargeRateBonus) * (this.ultActive ? 0.5 : 1);
+    this.ultCharge = Math.min(this.ultChargeNeed, this.ultCharge + points * rate);
   }
 
   // ------------------------------------------------------------------ rooms
