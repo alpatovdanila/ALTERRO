@@ -395,17 +395,19 @@ export class Game {
    */
   private roomPool(n: number): { def: EnemyDef; w: number }[] {
     const E = ENEMIES;
-    if (n <= 2) return [{ def: E.husk, w: 4 }, { def: E.crawler, w: 4 }]; // surface: zombies + rats
-    if (n === 3) return [{ def: E.husk, w: 3 }, { def: E.crawler, w: 3 }, { def: E.spitter, w: 1 }];
-    if (n <= 5) return [{ def: E.ram, w: 3 }, { def: E.polyp, w: 2 }, { def: E.husk, w: 1 }, { def: E.crawler, w: 1 }]; // cargo: industry
-    if (n === 6) return [{ def: E.husk, w: 4 }, { def: E.wretch, w: 2 }, { def: E.crawler, w: 1 }]; // quarters: humanoids
-    if (n === 7) return [{ def: E.crawler, w: 6 }, { def: E.husk, w: 1 }, { def: E.spitter, w: 1 }]; // mess: rats
-    if (n === 8) return [{ def: E.spitter, w: 3 }, { def: E.crawler, w: 2 }, { def: E.husk, w: 1 }]; // hydroponics
-    if (n <= 10) return [{ def: E.ram, w: 3 }, { def: E.polyp, w: 2 }, { def: E.wretch, w: 1 }]; // engines: robots
-    if (n === 11) return [{ def: E.wretch, w: 3 }, { def: E.crawler, w: 2 }, { def: E.ram, w: 1 }];
-    if (n === 12) return [{ def: E.wretch, w: 3 }, { def: E.polyp, w: 2 }, { def: E.spitter, w: 1 }]; // reactor
-    if (n === 13) return [{ def: E.wretch, w: 3 }, { def: E.spitter, w: 2 }, { def: E.husk, w: 1 }]; // control
-    return [{ def: E.polyp, w: 3 }, { def: E.ram, w: 2 }, { def: E.husk, w: 1 }]; // fire control
+    // ranged presence runs HIGH throughout — the air should be full of things
+    // to dodge, not just teeth to outrun
+    if (n <= 2) return [{ def: E.husk, w: 4 }, { def: E.crawler, w: 3 }, { def: E.spitter, w: 1 }]; // surface
+    if (n === 3) return [{ def: E.husk, w: 3 }, { def: E.crawler, w: 2 }, { def: E.spitter, w: 2 }];
+    if (n <= 5) return [{ def: E.ram, w: 3 }, { def: E.polyp, w: 3 }, { def: E.spitter, w: 1 }, { def: E.crawler, w: 1 }]; // cargo
+    if (n === 6) return [{ def: E.husk, w: 3 }, { def: E.wretch, w: 2 }, { def: E.spitter, w: 2 }]; // quarters
+    if (n === 7) return [{ def: E.crawler, w: 5 }, { def: E.spitter, w: 2 }, { def: E.husk, w: 1 }]; // mess
+    if (n === 8) return [{ def: E.spitter, w: 4 }, { def: E.crawler, w: 2 }, { def: E.polyp, w: 1 }]; // hydroponics
+    if (n <= 10) return [{ def: E.ram, w: 3 }, { def: E.polyp, w: 3 }, { def: E.wretch, w: 1 }, { def: E.spitter, w: 1 }]; // engines
+    if (n === 11) return [{ def: E.wretch, w: 3 }, { def: E.spitter, w: 2 }, { def: E.ram, w: 1 }, { def: E.polyp, w: 1 }];
+    if (n === 12) return [{ def: E.wretch, w: 2 }, { def: E.polyp, w: 3 }, { def: E.spitter, w: 2 }]; // reactor
+    if (n === 13) return [{ def: E.wretch, w: 3 }, { def: E.spitter, w: 3 }, { def: E.polyp, w: 1 }]; // control
+    return [{ def: E.polyp, w: 4 }, { def: E.ram, w: 2 }, { def: E.spitter, w: 2 }]; // fire control
   }
 
   private pickWeighted(pool: { def: EnemyDef; w: number }[]): EnemyDef {
@@ -421,7 +423,7 @@ export class Game {
   /** one wave of themed enemies; reinforcements announce themselves */
   private spawnWave(reinforcement: boolean) {
     const n = this.room;
-    let budget = (3.5 + n * 1.1) * 1.15; // +15% base pressure, all depths
+    let budget = (3.5 + n * 1.1) * 1.21; // +21% base pressure, all depths
     const picks: EnemyDef[] = [];
     if (!reinforcement && (n === 5 || n === 10 || (n > 10 && this.rng.chance(0.35)))) {
       picks.push(ENEMIES.bulwark);
@@ -976,8 +978,9 @@ export class Game {
     sfx.shot();
   }
 
-  fireEnemyGlob(from: Enemy, targetPos: THREE.Vector3, atEnemies: boolean) {
+  fireEnemyGlob(from: Enemy, targetPos: THREE.Vector3, atEnemies: boolean, angleOffset = 0) {
     const dir = new THREE.Vector3().subVectors(targetPos, from.pos).setY(0).normalize();
+    if (angleOffset !== 0) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleOffset);
     const mesh = buildGlob();
     mesh.position.set(from.pos.x, 0.8, from.pos.z);
     this.stage.scene.add(mesh);
@@ -994,9 +997,10 @@ export class Game {
       mesh,
       life: 3.5,
       hitRadius: 0.5,
-      light: this.stage.lendLight(0x9dff4a, 5, 4), // bile glow travels with it
+      // fan volleys only light their center glob — the pool is small
+      light: angleOffset === 0 ? this.stage.lendLight(0x9dff4a, 5, 4) : null,
     });
-    sfx.enemyShot();
+    if (angleOffset === 0) sfx.enemyShot();
   }
 
   /** turret mortar: big, slow, glowing — the whole point is walking out of the way */
@@ -1131,7 +1135,9 @@ export class Game {
         for (const m of this.xpMotes) m.flying = true;
       }
     }
-    if (!this.roomCleared && this.waveDelayT <= 0 && this.wavesLeft > 0 && this.room !== FINAL_ROOM) {
+    // no wave business while an ultimate holds the stage: the strike clears
+    // the room, THEN the silence, THEN whatever comes next
+    if (!this.roomCleared && !this.ultRunner.active && this.waveDelayT <= 0 && this.wavesLeft > 0 && this.room !== FINAL_ROOM) {
       const alive = this.enemies.filter((e) => e.state !== 'spawn').length;
       if (this.enemies.length === 0) {
         // strictly sequential wave: the field went silent (ult wipe, last
@@ -1382,7 +1388,14 @@ export class Game {
           if (e.stateT <= 0) {
             if (e.def.behavior === 'ranged') {
               const tp = this.rangedTargetPos(e);
-              if (tp) this.fireEnemyGlob(e, tp, e.frenzied);
+              if (tp) {
+                // deeper decks: spitters volley a three-glob fan — walk BETWEEN them
+                if (this.room >= 5) {
+                  for (const off of [-0.32, 0, 0.32]) this.fireEnemyGlob(e, tp, e.frenzied, off);
+                } else {
+                  this.fireEnemyGlob(e, tp, e.frenzied);
+                }
+              }
               e.state = 'recover';
               e.stateT = 0.6;
             } else if (e.def.behavior === 'turret') {
@@ -1500,7 +1513,7 @@ export class Game {
       if (e.attackCd <= 0) {
         e.state = 'windup';
         e.stateT = 0.9;
-        e.attackCd = 3.4;
+        e.attackCd = 2.9; // mortars land more often
       }
       return;
     }
@@ -1557,7 +1570,7 @@ export class Game {
       if (e.attackCd <= 0 && dist < range + 2) {
         e.state = 'windup';
         e.stateT = 0.55;
-        e.attackCd = 2.3;
+        e.attackCd = 1.9; // spitters keep the air busy
       }
       return;
     }

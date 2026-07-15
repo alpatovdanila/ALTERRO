@@ -39,7 +39,8 @@ export default defineConfig({
   base: './',
   plugins: [shotEndpoint()],
   server: {
-    port: 5173,
+    // honor an assigned port (preview tooling) — fall back to 5173
+    port: Number(process.env.PORT) || 5173,
     strictPort: true,
   },
 });
