@@ -25,6 +25,10 @@ export const FINAL_ROOM = 15;
 const HALF_W = ARENA_W / 2;
 const HALF_D = ARENA_D / 2;
 
+// shared per-frame scratch — reused across all enemies each tick so the chase
+// loop stops allocating a Vector3 per enemy per frame (~840/s in a full room)
+const chaseDir = new THREE.Vector3();
+
 export type EnemyState =
   | 'spawn'
   | 'chase'
@@ -212,6 +216,8 @@ export class Game {
   ultPotency = 1;
   ultOvercharged = false;
   private ultWindupT = 0;
+  /** Overload ultimate: seconds of 400-RPM mayhem left */
+  overloadT = 0;
 
   // progression
   level = 1;
@@ -331,8 +337,10 @@ export class Game {
   get ultReady(): boolean {
     return this.ultCharge >= this.ultChargeNeed && !this.ultRunner.active && this.ultWindupT <= 0;
   }
+  /** cached so hud.update()'s per-frame read doesn't scan the enemy list */
+  private bossRef: Enemy | null = null;
   get boss(): Enemy | null {
-    return this.enemies.find((e) => e.def.behavior === 'boss') ?? null;
+    return this.bossRef;
   }
 
   addDread(points: number) {
@@ -347,6 +355,7 @@ export class Game {
       disposeGroup(e.mesh.root);
     }
     this.enemies = [];
+    this.bossRef = null;
     for (const p of this.projectiles) {
       this.stage.scene.remove(p.mesh);
       disposeGroup(p.mesh);
@@ -375,6 +384,7 @@ export class Game {
     this.room = n;
     this.stats2.room = Math.max(this.stats2.room, n);
     this.roomCleared = false;
+    this.overloadT = 0; // the relic cools between halls
     this.playerPos.set(0, 0, HALF_D - 2);
     this.playerVel.set(0, 0, 0);
     this.facing = Math.PI; // face north, into the room
@@ -616,6 +626,10 @@ export class Game {
   }
 
   private updateDestructibles(dt: number) {
+    // fast path: no lit fuse (the usual case) → no snapshot allocation
+    let anyFuse = false;
+    for (const d of this.destructibles) if (d.fuse > 0) { anyFuse = true; break; }
+    if (!anyFuse) return;
     for (const d of [...this.destructibles]) {
       if (d.fuse > 0) {
         d.fuse -= dt;
@@ -660,6 +674,7 @@ export class Game {
         : null,
     };
     this.enemies.push(e);
+    if (def.behavior === 'boss') this.bossRef = e;
     return e;
   }
 
@@ -785,6 +800,7 @@ export class Game {
     const idx = this.enemies.indexOf(e);
     if (idx === -1) return;
     this.enemies.splice(idx, 1);
+    if (e === this.bossRef) this.bossRef = null;
     if (e.fireLight) {
       this.stage.releaseLight(e.fireLight);
       e.fireLight = null;
@@ -974,9 +990,12 @@ export class Game {
       // same heading — not a spread), and every future volley upgrade keeps it
       const lateral = this.trait === 'twinbarrel' ? [-0.17, 0.17] : [0];
       const right = new THREE.Vector3(d.z, 0, -d.x);
+      const overload = this.overloadT > 0;
       for (const lat of lateral) {
         const crit = this.rng.chance(this.stats.critChance);
-        const mesh = buildBolt(crit ? 0xff6a3c : 0xffdf8a);
+        // Overload paints the whole volley electric blue
+        const boltColor = overload ? 0x4aa0ff : crit ? 0xff6a3c : 0xffdf8a;
+        const mesh = buildBolt(boltColor);
         const ox = this.playerPos.x + right.x * lat;
         const oz = this.playerPos.z + right.z * lat;
         mesh.position.set(ox, 0.85, oz);
@@ -995,7 +1014,7 @@ export class Game {
           mesh,
           life: 2.2,
           hitRadius: 0.5,
-          light: this.stage.lendLight(0xffb054, 6, 5), // pooled — constant scene light count
+          light: this.stage.lendLight(overload ? 0x4aa0ff : 0xffb054, 6, 5), // pooled — constant scene light count
         });
       }
     }
@@ -1004,7 +1023,9 @@ export class Game {
     const volleyBolts = n * (this.trait === 'twinbarrel' ? 2 : 1);
     this.recoil = 0.14;
     this.stage.muzzleFlash(this.playerPos.x, this.playerPos.z);
-    this.stage.addShake(Math.min(0.17, 0.05 + volleyBolts * 0.018));
+    // Overload rattles the whole screen — real mayhem, twice the rumble
+    const shakeMul = this.overloadT > 0 ? 2.2 : 1;
+    this.stage.addShake(Math.min(0.17, 0.05 + volleyBolts * 0.018) * shakeMul);
     const fwd = new THREE.Vector3(Math.sin(this.facing), 0, Math.cos(this.facing));
     const muzzle = this.playerPos.clone().addScaledVector(fwd, 0.75);
     muzzle.y = 1.05;
@@ -1189,7 +1210,8 @@ export class Game {
     // no wave business while an ultimate holds the stage: the strike clears
     // the room, THEN the silence, THEN whatever comes next
     if (!this.roomCleared && !this.ultRunner.active && this.waveDelayT <= 0 && this.wavesLeft > 0 && this.room !== FINAL_ROOM) {
-      const alive = this.enemies.filter((e) => e.state !== 'spawn').length;
+      let alive = 0; // plain count — no per-frame filter array + closure
+      for (const e of this.enemies) if (e.state !== 'spawn') alive++;
       if (this.enemies.length === 0) {
         // strictly sequential wave: the field went silent (ult wipe, last
         // kill) — hold TWO SECONDS before the next one drops
@@ -1208,6 +1230,14 @@ export class Game {
         this.spawnWave(true);
       } else {
         this.waveGapT = 0;
+      }
+    }
+
+    if (this.overloadT > 0) {
+      this.overloadT -= dt;
+      // ambient blue crackle around the crusader while the relic runs hot
+      if (this.rng.chance(dt * 10)) {
+        this.particles.electric(this.playerPos.clone().setY(0.9 + this.rng.next()), 1, 0x4aa0ff);
       }
     }
 
@@ -1277,7 +1307,9 @@ export class Game {
       const target = this.nearestVisibleEnemy(this.playerPos);
       if (target) {
         this.firePlayerVolley(target);
-        this.fireCd = 1 / this.stats.fireRate;
+        // Overload: 400 RPM (6.67/s) — never slower than the built-up fire rate
+        const rof = this.overloadT > 0 ? Math.max(this.stats.fireRate, 400 / 60) : this.stats.fireRate;
+        this.fireCd = 1 / rof;
       }
     }
 
@@ -1551,7 +1583,7 @@ export class Game {
       e.pos.z += (this.rng.next() - 0.5) * dt;
       return;
     }
-    const dir = new THREE.Vector3().subVectors(targetPos, e.pos).setY(0);
+    const dir = chaseDir.subVectors(targetPos, e.pos).setY(0);
     const dist = dir.length();
     if (dist > 0.001) dir.divideScalar(dist);
     e.facing = Math.atan2(dir.x, dir.z);

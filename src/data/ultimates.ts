@@ -2,6 +2,7 @@
 // this module is pure data so the roster can grow without engine changes.
 
 export type UltimateId =
+  | 'overload'
   | 'gravelight'
   | 'quiet-word'
   | 'red-choir'
@@ -36,11 +37,24 @@ export function chargeLabel(u: UltimateDef): string {
 
 export const ULTIMATES: UltimateDef[] = [
   {
+    id: 'overload',
+    name: 'Перегрузка',
+    epithet: 'FULL AUTO',
+    desc: 'For 10 seconds the weapon screams at 400 RPM. No arena wipe — outmanoeuvre and mow them down. Movement is everything.',
+    short: '10 секунд — 400 выстрелов в минуту. Двигайся и коси.',
+    flavor: 'The relic does not cool. Neither do you.',
+    chargeNeed: 700,
+    color: 0x4aa0ff,
+    cssColor: '#4aa0ff',
+    accent: 0x2f6096, // cobalt livery
+  },
+  {
     id: 'gravelight',
     name: 'Гравилайт',
     epithet: 'THE RELIC CANNON',
     desc: 'Fire a colossal slow-moving orb that lashes lethal filaments into every enemy near its path, detonating against the far wall.',
     short: 'Огромный шар испепеляет всё на своём пути.',
+    locked: true,
     flavor: 'It was cut from the heart of a dead star. It is still angry about it.',
     chargeNeed: 700,
     color: 0x66ff88,

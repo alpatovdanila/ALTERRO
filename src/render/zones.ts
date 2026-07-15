@@ -436,8 +436,9 @@ const cargoHold: ZoneDef = {
         g.add(spot.target);
       }
     };
+    // one crane, over the FAR container row — the entry crane was removed so
+    // the mouth of the hold reads open
     buildCrane(-10.5);
-    buildCrane(10.5);
 
     // pallets and drums
     const drum = std(0x37424e, 0.6, 0.7);

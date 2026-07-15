@@ -74,6 +74,8 @@ const tmpQuat = new THREE.Quaternion();
 const tmpQuat2 = new THREE.Quaternion();
 const tmpScale = new THREE.Vector3();
 const tmpVec = new THREE.Vector3();
+const tmpVec2 = new THREE.Vector3();
+const tmpEuler = new THREE.Euler();
 const tmpColor = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -171,7 +173,7 @@ export class Gore {
     const d = this.decals[i];
     const s = d.active ? d.scale : 0;
     // spin around the surface normal, then align onto floor, wall, or prop flank
-    tmpQuat.setFromEuler(new THREE.Euler(0, d.rotY, 0));
+    tmpQuat.setFromEuler(tmpEuler.set(0, d.rotY, 0));
     if (d.wall === 5) {
       tmpQuat.premultiply(tmpQuat2.setFromUnitVectors(UP, tmpVec.set(Math.sin(d.nAng), 0, Math.cos(d.nAng))));
     } else {
@@ -192,7 +194,7 @@ export class Gore {
       pz = d.z + Math.cos(d.nAng) * lift;
     }
     tmpMat.compose(
-      new THREE.Vector3(px, py, pz),
+      tmpVec2.set(px, py, pz),
       tmpQuat,
       tmpScale.set(s * d.aspect, 1, s),
     );

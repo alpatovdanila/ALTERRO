@@ -116,6 +116,17 @@ export class UltimateRunner {
     if (this.a) return;
     const g = this.g;
     switch (id) {
+      case 'overload': {
+        // NOT a set piece — no `this.a`, so ultRunner stays inactive and the
+        // fight (waves, enemy fire) keeps running. The buff lives on the game.
+        g.overloadT = 10 + (g.ultTier - 1) * 2;
+        g.stage.setMood(0x0a1c34, 0.6, 1.2); // a cold blue flash as it kicks in
+        g.stage.addShake(0.5);
+        g.stage.ring(g.playerPos, 5, 0x4aa0ff, 0.6);
+        g.particles.electric(g.playerPos.clone().setY(1), 12, 0x4aa0ff);
+        sfx.ultLaunch();
+        break;
+      }
       case 'gravelight': {
         // aim at the centroid of the living — the orb wants company
         const dir = new THREE.Vector3(0, 0, -1);

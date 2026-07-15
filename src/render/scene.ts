@@ -122,6 +122,12 @@ interface Ring {
 }
 
 const tmpV = new THREE.Vector3();
+// module-scoped scratch for the per-frame fog recompose (was 5 allocs/frame)
+const fogM = new THREE.Matrix4();
+const fogPos = new THREE.Vector3();
+const fogScl = new THREE.Vector3();
+const fogEuler = new THREE.Euler();
+const fogQ = new THREE.Quaternion();
 
 /** animated set-dressing registries, rebuilt per room */
 interface BlinkEntry { mat: THREE.MeshBasicMaterial; on: THREE.Color; off: THREE.Color; speed: number; phase: number }
@@ -172,6 +178,8 @@ export class Stage {
   // cheap volumetrics: lit fog billboards drifting near the floor
   private fogMesh!: THREE.InstancedMesh;
   private fogData: { x: number; z: number; y: number; s: number; phase: number }[] = [];
+  /** fog updates on alternate frames — the drift is too slow to notice */
+  private fogFrame = 0;
 
   /** fixed-size pool of transient point lights — constant scene light count */
   private lightPool: THREE.PointLight[] = [];
@@ -489,19 +497,26 @@ export class Stage {
     }
   }
 
-  /** wall material clone with tiling fit to the wall's world length */
+  /** wall material clone with tiling fit to the wall's world length. Cached by
+   * (texture, tint, tiling): the ~5 walls of a room round to only 3-4 distinct
+   * lengths, and rooms sharing a wall set reuse the same materials. */
+  private wallFitCache = new Map<string, THREE.MeshStandardMaterial>();
   private wallFitMat(length: number): THREE.MeshStandardMaterial {
-    const m = this.wallMat.clone();
     const rx = Math.max(1, Math.round(length / 3));
-    for (const key of ['map', 'roughnessMap', 'normalMap', 'aoMap'] as const) {
-      const src = this.wallMat[key];
+    const key = `${this.wallMat.map?.uuid}|${this.wallMat.color.getHex()}|${rx}`;
+    const hit = this.wallFitCache.get(key);
+    if (hit) return hit;
+    const m = this.wallMat.clone();
+    for (const mkey of ['map', 'roughnessMap', 'normalMap', 'aoMap'] as const) {
+      const src = this.wallMat[mkey];
       if (src) {
         const c = src.clone();
         c.repeat.set(rx, 1);
         c.needsUpdate = true;
-        m[key] = c;
+        m[mkey] = c;
       }
     }
+    this.wallFitCache.set(key, m);
     return m;
   }
 
@@ -822,7 +837,29 @@ export class Stage {
       this.pulseLights.push({ light: strobe, base: 6, amp: 6, speed: 2.6, phase: 0 });
     }
 
+    this.freezeStaticMatrices();
     return build;
+  }
+
+  /**
+   * The room is built and will never move: freeze every decor object's matrix
+   * so three stops recomposing 150–340 static transforms on every scene-graph
+   * traversal (RenderPass + GTAO prepass + FX overlay = ~3–4×/frame). Only the
+   * animated set — spin/sway/piston targets — keeps matrixAutoUpdate on; their
+   * per-frame transform writes still propagate correctly because a live parent
+   * force-updates its frozen children. blink/pulseLight/cornerLight objects
+   * mutate only material/intensity, never a matrix, so they stay frozen.
+   */
+  private freezeStaticMatrices() {
+    const freeze = (o: THREE.Object3D) => {
+      o.matrixAutoUpdate = false;
+      o.updateMatrix();
+    };
+    this.roomGroup?.traverse(freeze);
+    this.shellGroup?.traverse(freeze);
+    for (const s of this.spins) s.o.matrixAutoUpdate = true;
+    for (const s of this.sways) s.o.matrixAutoUpdate = true;
+    for (const p of this.pistons) p.o.matrixAutoUpdate = true;
   }
 
 
@@ -865,6 +902,11 @@ export class Stage {
         phase: rng.range(0, Math.PI * 2),
       });
     }
+    // park the unused instance slots below the floor ONCE — the per-frame loop
+    // no longer touches them
+    fogM.compose(fogPos.set(0, -10, 0), fogQ.identity(), fogScl.set(0, 0, 0));
+    for (let i = n; i < this.fogMesh.count; i++) this.fogMesh.setMatrixAt(i, fogM);
+    this.fogMesh.instanceMatrix.needsUpdate = true;
   }
 
   setDoorOpen(open: boolean) {
@@ -1007,28 +1049,21 @@ export class Stage {
       pi.o.position.y = pi.baseY + Math.abs(Math.sin(now * pi.speed + pi.phase)) * pi.amp;
     }
 
-    // ground mist: horizontal sheets drifting just above the floor — lying
-    // flat means they can never intersect it and depth-clip into hard edges
-    if (this.fogData.length > 0) {
-      const m = new THREE.Matrix4();
-      const pos = new THREE.Vector3();
-      const scl = new THREE.Vector3();
-      const e = new THREE.Euler();
-      const q = new THREE.Quaternion();
-      for (let i = 0; i < this.fogMesh.count; i++) {
-        const f = this.fogData[i % this.fogData.length];
-        if (i >= this.fogData.length) {
-          m.compose(pos.set(0, -10, 0), q.identity(), scl.set(0, 0, 0));
-        } else {
-          pos.set(
-            f.x + Math.sin(now * 0.06 + f.phase) * 1.6,
-            0.25 + (f.y - 0.4) * 0.35 + Math.sin(now * 0.1 + f.phase * 2) * 0.06,
-            f.z + Math.cos(now * 0.05 + f.phase) * 1.1,
-          );
-          q.setFromEuler(e.set(-Math.PI / 2, 0, f.phase + now * 0.015));
-          m.compose(pos, q, scl.set(f.s * 1.3, f.s * 1.1, 1));
-        }
-        this.fogMesh.setMatrixAt(i, m);
+    // ground mist: horizontal sheets drifting just above the floor. The drift
+    // is a slow sin — recompute every OTHER frame (imperceptible) and only the
+    // ACTIVE slots; inactive slots are parked once by seedFog, not per frame.
+    this.fogFrame ^= 1;
+    if (this.fogData.length > 0 && this.fogFrame === 0) {
+      for (let i = 0; i < this.fogData.length; i++) {
+        const f = this.fogData[i];
+        fogPos.set(
+          f.x + Math.sin(now * 0.06 + f.phase) * 1.6,
+          0.25 + (f.y - 0.4) * 0.35 + Math.sin(now * 0.1 + f.phase * 2) * 0.06,
+          f.z + Math.cos(now * 0.05 + f.phase) * 1.1,
+        );
+        fogQ.setFromEuler(fogEuler.set(-Math.PI / 2, 0, f.phase + now * 0.015));
+        fogM.compose(fogPos, fogQ, fogScl.set(f.s * 1.3, f.s * 1.1, 1));
+        this.fogMesh.setMatrixAt(i, fogM);
       }
       this.fogMesh.instanceMatrix.needsUpdate = true;
     }
@@ -1089,14 +1124,20 @@ export class Stage {
     // shot/kill rumbles entirely) and decays fast so it reads as impact.
     this.trauma = Math.max(0, this.trauma - dt * 2.6);
     const sh = this.trauma * 0.55;
-    const focusTarget = THREE.MathUtils.clamp(playerZ, -ARENA_D / 2 + 5, ARENA_D / 2 - 5);
+    // horizontal: the camera tracks the player CLOSELY (0.55) so they stay near
+    // centre and can read both flanks of the room without walking to an edge.
+    const camX = playerX * 0.55;
+    // vertical: the view is biased NORTH of the player so the crusader sits in
+    // the bottom third of the screen — you see where you're going.
+    const AHEAD = 4;
+    const focusTarget = THREE.MathUtils.clamp(playerZ - AHEAD, -ARENA_D / 2 + 3.5, ARENA_D / 2 - 5);
     this.camFocusZ += (focusTarget - this.camFocusZ) * Math.min(1, dt * 4.5);
     this.camera.position.set(
-      this.camBase.x + playerX * 0.12 + (Math.random() - 0.5) * sh * 1.0,
+      this.camBase.x + camX + (Math.random() - 0.5) * sh * 1.0,
       this.camBase.y + (Math.random() - 0.5) * sh * 0.8,
-      this.camBase.z + this.camFocusZ + (Math.random() - 0.5) * sh * 0.6,
+      this.camBase.z + this.camFocusZ + AHEAD + (Math.random() - 0.5) * sh * 0.6,
     );
-    this.camera.lookAt(tmpV.set(playerX * 0.12, 0, this.camFocusZ - 0.6));
+    this.camera.lookAt(tmpV.set(camX, 0, this.camFocusZ));
   }
 
   /** menu shows the hero against the void: drop the whole room build */
@@ -1132,7 +1173,8 @@ export class Stage {
 
   /** snap the follow camera to the player (room transitions) */
   snapCamera(playerZ: number) {
-    this.camFocusZ = THREE.MathUtils.clamp(playerZ, -ARENA_D / 2 + 5, ARENA_D / 2 - 5);
+    // match update()'s north-biased focus so room entry frames correctly
+    this.camFocusZ = THREE.MathUtils.clamp(playerZ - 4, -ARENA_D / 2 + 3.5, ARENA_D / 2 - 5);
   }
 
   render() {

@@ -24,6 +24,15 @@ export class Hud {
   private edgeLow = document.getElementById('edge-low')!;
   private edgeUlt = document.getElementById('edge-ult')!;
   private wasCharged = false;
+  // last written values — the HUD only touches the DOM (and only reflows) when
+  // a value actually changes, not 60× a second
+  private lastHp = -1;
+  private lastXp = -1;
+  private lastLevel = -1;
+  private lastRoom = -1;
+  private lastBossHp = -2;
+  private lastDash = -1;
+  private lastLow = false;
 
   /** big center text, fades on its own — notification only */
   announce(text: string) {
@@ -52,21 +61,45 @@ export class Hud {
   }
 
   update(g: Game) {
-    this.hpFill.style.width = `${Math.max(0, (g.playerHp / g.stats.maxHp) * 100)}%`;
-    this.xpFill.style.width = `${Math.min(100, (g.xp / g.xpNext) * 100)}%`;
-    this.levelNum.textContent = String(g.level);
-    this.roomLabel.textContent =
-      g.room === FINAL_ROOM ? 'ЛИТЕЙНЫЙ ДОК' : zoneForRoom(g.room).name.toUpperCase();
+    const hp = Math.max(0, Math.round((g.playerHp / g.stats.maxHp) * 100));
+    if (hp !== this.lastHp) {
+      this.hpFill.style.width = `${hp}%`;
+      this.lastHp = hp;
+    }
+    const xp = Math.min(100, Math.round((g.xp / g.xpNext) * 100));
+    if (xp !== this.lastXp) {
+      this.xpFill.style.width = `${xp}%`;
+      this.lastXp = xp;
+    }
+    if (g.level !== this.lastLevel) {
+      this.levelNum.textContent = String(g.level);
+      this.lastLevel = g.level;
+    }
+    if (g.room !== this.lastRoom) {
+      this.roomLabel.textContent =
+        g.room === FINAL_ROOM ? 'ЛИТЕЙНЫЙ ДОК' : zoneForRoom(g.room).name.toUpperCase();
+      this.lastRoom = g.room;
+    }
 
     const boss = g.boss;
     this.bossWrap.classList.toggle('hidden', !boss);
     if (boss) {
-      this.bossName.textContent = boss.def.name;
-      this.bossFill.style.width = `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%`;
+      const bhp = Math.max(0, Math.round((boss.hp / boss.maxHp) * 100));
+      if (bhp !== this.lastBossHp) {
+        this.bossName.textContent = boss.def.name;
+        this.bossFill.style.width = `${bhp}%`;
+        this.lastBossHp = bhp;
+      }
+    } else {
+      this.lastBossHp = -2;
     }
 
     const frac = Math.min(1, g.ultCharge / g.ultChargeNeed);
-    this.dreadFill.style.strokeDashoffset = String(RING_CIRC * (1 - frac));
+    const dash = Math.round(RING_CIRC * (1 - frac));
+    if (dash !== this.lastDash) {
+      this.dreadFill.style.strokeDashoffset = String(dash);
+      this.lastDash = dash;
+    }
     const charged = frac >= 1;
     this.dreadWrap.classList.toggle('charged', charged);
     this.dreadHint.classList.toggle('hidden', !charged);
@@ -80,7 +113,11 @@ export class Hud {
     this.wasCharged = charged;
 
     // screen edges: bleeding out / relic burning to be used
-    this.edgeLow.classList.toggle('on', g.playerHp > 0 && g.playerHp < g.stats.maxHp * 0.3);
-    this.edgeUlt.classList.toggle('on', charged);
+    const low = g.playerHp > 0 && g.playerHp < g.stats.maxHp * 0.3;
+    if (low !== this.lastLow) {
+      this.edgeLow.classList.toggle('on', low);
+      this.lastLow = low;
+    }
+    this.edgeUlt.classList.toggle('on', charged); // toggle is idempotent — cheap
   }
 }

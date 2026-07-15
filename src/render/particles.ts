@@ -241,10 +241,14 @@ class Pool {
     return p;
   }
 
+  private hadActive = false;
+
   update(dt: number, rand: () => number) {
+    let dirty = false;
     for (let i = 0; i < this.ps.length; i++) {
       const p = this.ps[i];
       if (!p.active) continue;
+      dirty = true; // an active particle means the buffer changed this frame
       p.life -= dt;
       if (p.life <= 0) {
         p.active = false;
@@ -269,9 +273,14 @@ class Pool {
       p.rot += p.spin * dt;
       this.write(i);
     }
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.uvAttr.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    // only re-upload when something actually moved — idle pools (menu, lulls)
+    // no longer push 1024+320 dead instances to the GPU every frame
+    if (dirty || this.hadActive) {
+      this.mesh.instanceMatrix.needsUpdate = true;
+      this.uvAttr.needsUpdate = true;
+      if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    }
+    this.hadActive = dirty;
   }
 }
 
