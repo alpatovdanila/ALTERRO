@@ -144,7 +144,13 @@ export function showPause(
   el.querySelector('#resume-btn')!.addEventListener('click', onResume);
 }
 
-export function showDeath(stats: RunStats, onRestart: () => void, onRelic: () => void) {
+/** the fall: one paid return per run (free for now), or the long walk back */
+export function showDeath(
+  stats: RunStats,
+  canResurrect: boolean,
+  onResurrect: () => void,
+  onSurrender: () => void,
+) {
   const el = screen();
   el.innerHTML = `
     <div class="title death-title">ПРОВАЛ</div>
@@ -154,12 +160,12 @@ export function showDeath(stats: RunStats, onRestart: () => void, onRelic: () =>
       УЛЬТА — <b>${stats.ultUses}</b> РАЗ · ВРЕМЯ — <b>${fmtTime(stats.timeSec)}</b>
     </div>
     <div class="card-row">
-      <button class="btn" id="restart-btn">ВОССТАТЬ</button>
-      <button class="btn" id="relic-btn">СМЕНИТЬ РЕЛИКВИЮ</button>
+      ${canResurrect ? '<button class="btn" id="res-btn">ВОССТАТЬ (ПОКА БЕСПЛАТНО)</button>' : ''}
+      <button class="btn" id="surrender-btn">СДАТЬСЯ</button>
     </div>
   `;
-  el.querySelector('#restart-btn')!.addEventListener('click', onRestart);
-  el.querySelector('#relic-btn')!.addEventListener('click', onRelic);
+  el.querySelector('#res-btn')?.addEventListener('click', onResurrect);
+  el.querySelector('#surrender-btn')!.addEventListener('click', onSurrender);
 }
 
 export function showVictory(stats: RunStats, onRestart: () => void, onRelic: () => void) {

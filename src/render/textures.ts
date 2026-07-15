@@ -114,7 +114,12 @@ export function getTexLib() {
 /**
  * textured standard material for props: clones the set's maps (cheap — shares
  * image data) so per-prop repeat doesn't fight the floor's.
+ *
+ * Memoized by every parameter: identical props (same kind/color/finish/tiling)
+ * share ONE material AND one clone-set of textures. Cargo rooms alone drop from
+ * ~78 texture clones to a handful. Safe — these materials are never mutated.
  */
+const texturedCache = new Map<string, THREE.MeshStandardMaterial>();
 export function texturedStd(
   kind: 'deck' | 'panel' | 'rock',
   color: number,
@@ -123,6 +128,9 @@ export function texturedStd(
   repeat = 1,
   repeatY = repeat, // NEVER stretch: big non-square faces tile per-axis
 ): THREE.MeshStandardMaterial {
+  const key = `${kind}|${color}|${rough}|${metal}|${repeat}|${repeatY}`;
+  const hit = texturedCache.get(key);
+  if (hit) return hit;
   const set = getTexLib()[kind];
   const map = set.map.clone();
   const roughnessMap = set.roughnessMap.clone();
@@ -131,7 +139,7 @@ export function texturedStd(
     t.repeat.set(repeat, repeatY);
     t.needsUpdate = true;
   }
-  return new THREE.MeshStandardMaterial({
+  const mat = new THREE.MeshStandardMaterial({
     map,
     roughnessMap,
     normalMap,
@@ -140,6 +148,8 @@ export function texturedStd(
     roughness: rough,
     metalness: metal,
   });
+  texturedCache.set(key, mat);
+  return mat;
 }
 
 /** a pack sprite loaded as a plain texture (fog sheets, decal alpha) */

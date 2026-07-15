@@ -11,6 +11,8 @@ import { Input } from '../core/input';
 import { Rng } from '../core/rng';
 import { sfx } from '../core/sfx';
 import { ENEMIES, type EnemyDef, scaleHp, scaleDamage } from '../data/enemies';
+import { sphereGeo } from '../render/geocache';
+import { FX_LAYER } from '../render/scene';
 import type { PlayerStats, CardContext } from '../data/cards';
 import { type UltimateDef, TIER_MULT } from '../data/ultimates';
 import type { TraitId } from '../data/traits';
@@ -190,6 +192,11 @@ export class Game {
   private fireCd = 0;
   private facing = 0;
   invulnT = 0;
+  /** one free return per run — the second death is final */
+  resurrectUsed = false;
+  private resDropT = 0;
+  private resShieldT = 0;
+  private shieldMesh!: THREE.Mesh;
   private hurtCdT = 0;
   private stepT = 0;
   moving = false;
@@ -264,6 +271,21 @@ export class Game {
     this.playerHp = this.stats.maxHp;
     this.playerMesh = buildPlayer(ultDef.color, trait, ultDef.accent); // doctrine + livery on the armor
     this.stage.scene.add(this.playerMesh.root);
+    // the resurrection ward — invisible until the one time it matters
+    this.shieldMesh = new THREE.Mesh(
+      sphereGeo(1.05, 18, 14),
+      new THREE.MeshBasicMaterial({
+        color: 0xf0d27a,
+        transparent: true,
+        opacity: 0.2,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    this.shieldMesh.position.y = 0.9;
+    this.shieldMesh.layers.set(FX_LAYER); // additive glow — AO must not touch it
+    this.shieldMesh.visible = false;
+    this.playerMesh.root.add(this.shieldMesh);
     this.ultRunner = new UltimateRunner(this);
     this.loadRoom(1);
   }
@@ -895,6 +917,22 @@ export class Game {
     return true;
   }
 
+  /** once per run: a fresh body drops from the sky onto the old one's grave —
+   * same room, same state, full health, three seconds of golden ward */
+  resurrect() {
+    if (this.resurrectUsed || !this.over) return;
+    this.resurrectUsed = true;
+    this.over = false;
+    this.playerHp = this.stats.maxHp;
+    this.resDropT = 0.85;
+    this.resShieldT = 0.85 + 3;
+    this.invulnT = 0.85 + 3;
+    this.playerMesh.root.visible = true;
+    // the landing marker burns on the deck while the body falls
+    this.stage.ring(this.playerPos, 2.4, 0xd8c25a, 0.85, this.playerPos);
+    sfx.levelUpRiff();
+  }
+
   damagePlayer(amount: number) {
     if (this.invulnT > 0 || this.hurtCdT > 0 || this.over) return;
     this.playerHp -= amount;
@@ -1136,6 +1174,18 @@ export class Game {
         for (const m of this.xpMotes) m.flying = true;
       }
     }
+    if (this.resDropT > 0) {
+      this.resDropT -= dt;
+      if (this.resDropT <= 0) {
+        // impact: the crusader lands where he fell
+        this.stage.addShake(0.55);
+        this.stage.ring(this.playerPos, 4, 0xd8c25a, 0.5);
+        this.particles.electric(this.playerPos.clone().setY(1), 8, 0xd8c25a);
+        this.particles.puff(this.playerPos.clone().setY(0.3), 4, { size: 1 });
+        sfx.slamWarn();
+      }
+    }
+    if (this.resShieldT > 0) this.resShieldT -= dt;
     // no wave business while an ultimate holds the stage: the strike clears
     // the room, THEN the silence, THEN whatever comes next
     if (!this.roomCleared && !this.ultRunner.active && this.waveDelayT <= 0 && this.wavesLeft > 0 && this.room !== FINAL_ROOM) {
@@ -1191,7 +1241,7 @@ export class Game {
 
   private updatePlayer(dt: number) {
     const mv = this.input.move();
-    const locked = this.ultRunner.lockPlayer || this.ultWindupT > 0;
+    const locked = this.ultRunner.lockPlayer || this.ultWindupT > 0 || this.resDropT > 0;
     this.moving = !locked && (mv.x !== 0 || mv.z !== 0);
 
     // heavy armor: accelerate in, coast out — not a hockey puck, not a tank.
@@ -1983,6 +2033,17 @@ export class Game {
     const backX = -Math.sin(this.facing) * this.recoil;
     const backZ = -Math.cos(this.facing) * this.recoil;
     pm.position.set(this.playerPos.x + backX, bob, this.playerPos.z + backZ);
+    // resurrection: the new body falls out of the sky onto the grave
+    if (this.resDropT > 0) {
+      const k = this.resDropT / 0.85;
+      pm.position.y = 16 * k * k; // accelerating fall
+    }
+    this.shieldMesh.visible = this.resDropT <= 0 && this.resShieldT > 0;
+    if (this.shieldMesh.visible) {
+      const sm = this.shieldMesh.material as THREE.MeshBasicMaterial;
+      sm.opacity = 0.16 + Math.sin(this.stats2.timeSec * 9) * 0.07;
+      this.shieldMesh.scale.setScalar(1 + Math.sin(this.stats2.timeSec * 5) * 0.05);
+    }
     const targetRot = this.facing;
     let dr = targetRot - pm.rotation.y;
     while (dr > Math.PI) dr -= Math.PI * 2;

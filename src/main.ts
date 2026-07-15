@@ -68,7 +68,18 @@ function startRun(ult: UltimateDef, trait: TraitId) {
       hud.show(false);
       sfx.setMusicMode('off'); // the ПРОВАЛ screen is silent
       sfx.loseJingle();
-      showDeath(game!.stats2, () => startRun(currentUlt!, currentTrait), backToRelicSelect);
+      showDeath(
+        game!.stats2,
+        !game!.resurrectUsed,
+        () => {
+          // the one free return: same room, same state, full health
+          clearScreen();
+          hud.show(true);
+          sfx.setMusicMode('normal');
+          game!.resurrect();
+        },
+        backToRelicSelect, // СДАТЬСЯ — back to the reliquary
+      );
     },
     onVictory() {
       hud.show(false);
@@ -144,7 +155,13 @@ async function boot() {
   loaderText.textContent = 'ДЕКОДИРОВАНИЕ ЗВУКА…';
   await sfx.preload();
   loaderText.textContent = 'КОМПИЛЯЦИЯ ШЕЙДЕРОВ…';
-  await new Promise((r) => setTimeout(r, 40)); // let the label paint
+  // task-boundary yield so the label paints — a MessageChannel hop is NOT
+  // throttled in hidden/embedded tabs the way setTimeout is
+  await new Promise((r) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => r(undefined);
+    ch.port2.postMessage(0);
+  });
   warmup();
   loader.classList.add('hidden');
   showMenu();

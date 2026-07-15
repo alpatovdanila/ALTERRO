@@ -69,8 +69,20 @@ const AW = 24; // arena width  (x: -12..12)
 const AD = 30; // arena depth (z: -15..15) — two screens; enter south, door north
 
 // ------------------------------------------------------------- helpers
+// Memoized: identical (color, rough, metal) props return the SAME material, so
+// a room's ~50 static materials collapse to ~15 uniques — fewer allocations,
+// and meshes that share a material can batch. SAFE because zone materials are
+// never mutated after creation (the animated ones are MeshBasicMaterial made
+// inline, not through std()).
+const stdCache = new Map<string, THREE.MeshStandardMaterial>();
 function std(color: number, rough = 0.75, metal = 0.5): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+  const key = `${color}|${rough}|${metal}`;
+  let m = stdCache.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+    stdCache.set(key, m);
+  }
+  return m;
 }
 
 function box(
