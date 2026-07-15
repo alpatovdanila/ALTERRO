@@ -32,8 +32,9 @@ export class Hud {
   private edgeLow = document.getElementById('edge-low')!;
   private edgeUlt = document.getElementById('edge-ult')!;
   private wasCharged = false;
-  /** last time the "УЛЬТА ГОТОВА" banner was posted (ms) — re-posts every 3s */
-  private lastReadyAnnounce = -9999;
+  /** last time ANY center banner was posted (ms) — the ready re-post waits for
+   * the area to be idle so it never stomps a room/level/notify announcement */
+  private lastAnnounceAt = -9999;
   /** last whole-second shown on the Overload countdown */
   private lastUltTimer = -1;
   // last written values — the HUD only touches the DOM (and only reflows) when
@@ -60,6 +61,7 @@ export class Hud {
     this.announceEl.classList.remove('show');
     void this.announceEl.offsetWidth; // restart the animation
     this.announceEl.classList.add('show');
+    this.lastAnnounceAt = performance.now();
   }
 
   /** the hall introduces itself as you step through the door — name only */
@@ -123,23 +125,19 @@ export class Hud {
     const charged = frac >= 1;
     this.dreadWrap.classList.toggle('charged', charged);
     this.dreadHint.classList.toggle('hidden', !charged);
-    const now = performance.now();
     if (charged && !this.wasCharged) {
       sfx.ready();
       sfx.setDrone(true);
       this.announce('УЛЬТА ГОТОВА', ULT_HINT);
-      this.lastReadyAnnounce = now;
     } else if (!charged && this.wasCharged) {
       sfx.setDrone(false);
     }
     this.wasCharged = charged;
-    // while the relic sits ready and unused, re-post the banner every 3s so the
-    // player is reminded the ult is available (silent — no repeated sting)
-    if (charged && !g.ultActive && !g.paused && !g.over) {
-      if (now - this.lastReadyAnnounce >= 3000) {
-        this.announce('УЛЬТА ГОТОВА', ULT_HINT);
-        this.lastReadyAnnounce = now;
-      }
+    // while the relic sits ready and unused, re-post the banner every 3s — but
+    // ONLY when the banner area has been idle 3s, so it never stomps a room-name,
+    // level-up, or "no targets" announcement sharing the same element (silent)
+    if (charged && !g.ultActive && !g.paused && !g.over && performance.now() - this.lastAnnounceAt >= 3000) {
+      this.announce('УЛЬТА ГОТОВА', ULT_HINT);
     }
 
     // Overload's last 5 seconds: a big ticking countdown, notification-style
