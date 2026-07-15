@@ -1774,17 +1774,20 @@ export class Game {
       const p = this.projectiles[i];
       p.life -= dt;
       p.pos.addScaledVector(p.vel, dt);
-      // breakables take the hit before generic cover does
-      for (const d of this.destructibles) {
-        if (p.pos.distanceTo(d.pos) < d.r + 0.15) {
-          this.damageDestructible(d, p.damage);
-          p.life = -1;
-          break;
+      // breakables take the hit before generic cover does — but only from the
+      // PLAYER's fire: enemy globs and mortars sail over everything
+      if (p.fromPlayer) {
+        for (const d of this.destructibles) {
+          if (p.pos.distanceTo(d.pos) < d.r + 0.15) {
+            this.damageDestructible(d, p.damage);
+            p.life = -1;
+            break;
+          }
         }
       }
       let dead = p.life <= 0 ||
         Math.abs(p.pos.x) > HALF_W - 0.2 || Math.abs(p.pos.z) > HALF_D - 0.2 ||
-        this.hitsObstacle(p.pos); // crates are cover — for both sides
+        (p.fromPlayer && this.hitsObstacle(p.pos)); // cover blocks bolts, not bile
 
       if (!dead && (p.fromPlayer || p.targetEnemies)) {
         for (const e of this.enemies) {
