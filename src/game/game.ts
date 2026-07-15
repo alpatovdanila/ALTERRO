@@ -218,6 +218,8 @@ export class Game {
   private ultWindupT = 0;
   /** Overload ultimate: seconds of 400-RPM mayhem left */
   overloadT = 0;
+  /** debug cheat: keep the Dread meter pinned full */
+  cheatFullUlt = false;
 
   // progression
   level = 1;
@@ -1166,6 +1168,9 @@ export class Game {
     this.stats2.timeSec += dt;
     this.invulnT = Math.max(0, this.invulnT - dt);
     this.hurtCdT = Math.max(0, this.hurtCdT - dt);
+    // cheat: refill the Dread meter every tick so the ult is always ready
+    // (activation zeroes it; this tops it back up before the next frame)
+    if (this.cheatFullUlt && this.ultWindupT <= 0) this.ultCharge = this.ultChargeNeed;
     sfx.setCombat(this.enemies.length > 0);
     sfx.tick(dt);
 

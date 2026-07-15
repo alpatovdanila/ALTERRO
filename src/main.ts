@@ -16,7 +16,7 @@ import { rollCards } from './data/cards';
 import { ULTIMATES, type UltimateDef } from './data/ultimates';
 import { TRAITS, type TraitId } from './data/traits';
 import { Hud } from './ui/hud';
-import { showStart, showWheel, showDeath, showVictory, showPause, clearScreen } from './ui/screens';
+import { showStart, showWheel, showDeath, showVictory, showPause, clearScreen, cheats } from './ui/screens';
 
 // Bootstrap + fixed-timestep loop (DESIGN.md §11: deterministic sim decoupled
 // from render). main.ts owns the state machine between screens and the sim.
@@ -100,6 +100,7 @@ function startRun(ult: UltimateDef, trait: TraitId) {
       }, 380);
     },
   });
+  game.cheatFullUlt = cheats.fullUlt;
 }
 
 // ------------------------------------------------ reliquary (main menu)

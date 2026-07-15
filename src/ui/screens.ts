@@ -10,6 +10,9 @@ import type { RunStats } from '../game/game';
 
 const screen = () => document.getElementById('screen')!;
 
+/** debug toggles set on the start screen, read by the run when it begins */
+export const cheats = { fullUlt: false };
+
 export function clearScreen() {
   const el = screen();
   el.innerHTML = '';
@@ -38,11 +41,20 @@ export function showStart(
     <div class="screen-head">ВЫБЕРИ УМЕНИЕ</div>
     <div class="card-row" id="trait-row"></div>
     <button class="btn" id="begin-btn" disabled>НАЧАТЬ СПУСК</button>
+    <label class="cheat-toggle" id="cheat-ult">
+      <input type="checkbox" ${cheats.fullUlt ? 'checked' : ''} />
+      <span>ЧИТ: УЛЬТА ВСЕГДА ГОТОВА</span>
+    </label>
     <div class="hint-line">
       WASD — ДВИЖЕНИЕ &nbsp;·&nbsp; СТОЙ НА МЕСТЕ — ОГОНЬ &nbsp;·&nbsp; ПРОБЕЛ — УЛЬТА, КОГДА КОЛЬЦО ГОРИТ<br/>
       ГЕЙМПАД: СТИК — ДВИЖЕНИЕ &nbsp;·&nbsp; A / RT — УЛЬТА &nbsp;·&nbsp; START — ПАУЗА
     </div>
   `;
+  const cheatBox = el.querySelector('#cheat-ult input') as HTMLInputElement;
+  cheatBox.addEventListener('change', () => {
+    cheats.fullUlt = cheatBox.checked;
+    sfx.uiSelect();
+  });
   let selectedUlt: UltimateDef | null = null;
   let selectedTrait: TraitId | null = null;
   const beginBtn = el.querySelector('#begin-btn') as HTMLButtonElement;

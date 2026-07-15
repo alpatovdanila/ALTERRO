@@ -397,3 +397,18 @@ html, body, #app {
   text-shadow: 2px 2px 0 #000;
   line-height: 2; text-align: center; text-transform: uppercase;
 }
+
+/* debug cheat toggle */
+.cheat-toggle {
+  margin-top: 16px;
+  display: flex; align-items: center; gap: 10px;
+  pointer-events: auto; cursor: pointer;
+  font-family: var(--font-body); font-weight: 500;
+  font-size: 13px; letter-spacing: 2px; color: var(--ash);
+  text-transform: uppercase; user-select: none;
+}
+.cheat-toggle input {
+  width: 18px; height: 18px; accent-color: var(--forbidden);
+  cursor: pointer;
+}
+.cheat-toggle:hover { color: var(--forbidden); }
