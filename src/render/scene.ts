@@ -763,7 +763,7 @@ export class Stage {
     if (fset.emissiveMap) {
       this.floorMat.emissiveMap = fset.emissiveMap;
       this.floorMat.emissive.setHex(0xffffff);
-      this.floorMat.emissiveIntensity = 0.9;
+      this.floorMat.emissiveIntensity = 1.04; // +15%
     } else {
       this.floorMat.emissiveMap = null;
       this.floorMat.emissive.setHex(0x000000);

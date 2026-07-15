@@ -31,7 +31,7 @@ function std(color: number, rough = 0.8, metal = 0.35): THREE.MeshStandardMateri
   const m = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
   // readability lift: bodies carry a whisper of self-light so they never
   // fall into full silhouette against the dark decks
-  m.emissive.set(color).multiplyScalar(0.14);
+  m.emissive.set(color).multiplyScalar(0.16); // +15% self-light across the board
   return m;
 }
 

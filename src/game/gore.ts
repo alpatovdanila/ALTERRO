@@ -221,7 +221,7 @@ export class Gore {
       d.targetScale = (0.6 + rand() * 1.0) * sizeMult;
       d.aspect = 1;
       if (oil) tmpColor.setHSL(0.6, 0.12, 0.03 + rand() * 0.02);
-      else tmpColor.setHSL(0.995, 0.8, 0.055 + rand() * 0.045);
+      else tmpColor.setHSL(0.99, 0.9, 0.14 + rand() * 0.07); // RED, not black-red
       (d.oil ? this.oilMesh : this.decalMesh).setColorAt(i, tmpColor);
     }
     if (this.decalMesh.instanceColor) this.decalMesh.instanceColor.needsUpdate = true;
@@ -246,7 +246,7 @@ export class Gore {
       d.targetScale = (0.7 + rand() * 1.2) * sizeMult;
       d.aspect = 1;
       if (oil) tmpColor.setHSL(0.6, 0.12, 0.03 + rand() * 0.02); // near-black machine oil
-      else tmpColor.setHSL(0.995, 0.8, 0.055 + rand() * 0.045); // dark arterial reds
+      else tmpColor.setHSL(0.99, 0.9, 0.14 + rand() * 0.07); // RED, not black-red // dark arterial reds
       (d.oil ? this.oilMesh : this.decalMesh).setColorAt(i, tmpColor);
     }
     if (this.decalMesh.instanceColor) this.decalMesh.instanceColor.needsUpdate = true;
@@ -270,7 +270,7 @@ export class Gore {
     d.targetScale = (1.9 + this.rand() * 1.0) * sizeMult;
     d.aspect = 1;
     if (oil) tmpColor.setHSL(0.6, 0.15, 0.025 + this.rand() * 0.015);
-    else tmpColor.setHSL(0.995, 0.8, 0.06 + this.rand() * 0.03); // near-black heart blood
+    else tmpColor.setHSL(0.99, 0.9, 0.12 + this.rand() * 0.05); // deep but unmistakably red
     (d.oil ? this.oilMesh : this.decalMesh).setColorAt(i, tmpColor);
     if (this.decalMesh.instanceColor) this.decalMesh.instanceColor.needsUpdate = true;
     if (this.oilMesh.instanceColor) this.oilMesh.instanceColor.needsUpdate = true;
@@ -297,7 +297,7 @@ export class Gore {
       d.targetScale = (0.55 - n * 0.05 + this.rand() * 0.25) * sizeMult;
       d.aspect = 1.9;
       if (oil) tmpColor.setHSL(0.6, 0.12, 0.025 + this.rand() * 0.015);
-      else tmpColor.setHSL(0.995, 0.8, 0.05 + this.rand() * 0.04);
+      else tmpColor.setHSL(0.99, 0.9, 0.13 + this.rand() * 0.06);
       (d.oil ? this.oilMesh : this.decalMesh).setColorAt(i, tmpColor);
     }
     if (this.decalMesh.instanceColor) this.decalMesh.instanceColor.needsUpdate = true;
@@ -393,7 +393,7 @@ export class Gore {
       g.life = g.maxLife;
       g.meat = kind === 'meat';
       g.bounced = false;
-      if (kind === 'meat') tmpColor.setHSL(0.99, 0.72, 0.1 + rand() * 0.09);
+      if (kind === 'meat') tmpColor.setHSL(0.99, 0.85, 0.16 + rand() * 0.1);
       else if (kind === 'ash') tmpColor.setHSL(0.08, 0.05, 0.06 + rand() * 0.05);
       else if (kind === 'brass') tmpColor.setHSL(0.11, 0.65, 0.42 + rand() * 0.12);
       else if (kind === 'metal') tmpColor.setHSL(0.58, 0.06, 0.22 + rand() * 0.18);
