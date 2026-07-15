@@ -112,23 +112,42 @@ export function showWheel(cards: CardDef[], tier: number, onPick: (c: CardDef) =
   el.innerHTML = `
     <div class="screen-head">КОЛЕСО ОБРЯДА ВРАЩАЕТСЯ — ВЫБИРАЙ</div>
     <div class="card-row" id="wheel-row"></div>
-    <div class="hint-line">РАНГ РЕЛИКВИИ: ${TIER_NAME[tier - 1]}</div>
+    <div class="hint-line">РАНГ РЕЛИКВИИ: ${TIER_NAME[tier - 1]} &nbsp;·&nbsp; 1 / 2 / 3 — ВЫБОР С КЛАВИАТУРЫ</div>
   `;
   const row = el.querySelector('#wheel-row')!;
-  for (const c of cards) {
+  const chosen: (() => void)[] = [];
+  let done = false;
+
+  const pick = (c: CardDef) => {
+    if (done) return;
+    done = true;
+    window.removeEventListener('keydown', onKey);
+    sfx.uiSelect();
+    onPick(c);
+  };
+  const onKey = (e: KeyboardEvent) => {
+    const idx = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code) % 3;
+    if (idx >= 0 && chosen[idx]) {
+      e.preventDefault();
+      chosen[idx]();
+    }
+  };
+  window.addEventListener('keydown', onKey);
+
+  cards.forEach((c, i) => {
     const card = document.createElement('div');
     card.className = `card wheel-card r-${c.rarity}`;
+    // a keycap badge showing the number key that picks this card
     card.innerHTML = `
+      <div class="keycap">${i + 1}</div>
       <div class="c-rarity">${RARITY_LABEL[c.rarity]}</div>
       <div class="c-name">${c.name}</div>
       <div class="c-desc">${c.desc}</div>
     `;
-    card.addEventListener('click', () => {
-      sfx.uiSelect();
-      onPick(c);
-    });
+    chosen[i] = () => pick(c);
+    card.addEventListener('click', () => pick(c));
     row.appendChild(card);
-  }
+  });
 }
 
 /** Esc pause menu: resume, music toggle, restart the current hall, quit to menu */
