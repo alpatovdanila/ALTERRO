@@ -110,7 +110,7 @@ export function showStart(
 export function showWheel(cards: CardDef[], tier: number, onPick: (c: CardDef) => void) {
   const el = screen();
   el.innerHTML = `
-    <div class="screen-head">КОЛЕСО ОБРЯДА ВРАЩАЕТСЯ — ВЫБИРАЙ</div>
+    <div class="screen-head">НОВЫЙ УРОВЕНЬ — НОВАЯ СПОСОБНОСТЬ</div>
     <div class="card-row" id="wheel-row"></div>
     <div class="hint-line">РАНГ РЕЛИКВИИ: ${TIER_NAME[tier - 1]} &nbsp;·&nbsp; 1 / 2 / 3 — ВЫБОР С КЛАВИАТУРЫ</div>
   `;
