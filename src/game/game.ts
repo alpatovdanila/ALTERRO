@@ -221,6 +221,8 @@ export class Game {
   overloadT = 0;
   /** debug cheat: keep the Dread meter pinned full */
   cheatFullUlt = false;
+  /** pristine per-bolt damage (before upgrades) — Overload fires at this */
+  private baseDamage = 0;
 
   // progression
   level = 1;
@@ -278,6 +280,7 @@ export class Game {
     this.ultDef = ultDef;
     this.trait = trait;
     this.playerHp = this.stats.maxHp;
+    this.baseDamage = this.stats.damage; // pristine — before any Rite Wheel card
     this.playerMesh = buildPlayer(ultDef.color, trait, ultDef.accent); // doctrine + livery on the armor
     this.stage.scene.add(this.playerMesh.root);
     // the resurrection ward — invisible until the one time it matters
@@ -1010,8 +1013,10 @@ export class Game {
       const right = new THREE.Vector3(d.z, 0, -d.x);
       const overload = this.overloadT > 0;
       for (const lat of lateral) {
-        const crit = this.rng.chance(this.stats.critChance);
-        // Overload paints the whole volley electric blue
+        // Overload is a FIXED-power mode: base damage, no crit/burn/pierce/
+        // ricochet, fixed rate. Only projectile COUNT (multishot + twin barrel)
+        // carries through — damage/ROF/modifier upgrades do NOT stack with it.
+        const crit = overload ? false : this.rng.chance(this.stats.critChance);
         const boltColor = overload ? 0x4aa0ff : crit ? 0xff6a3c : 0xffdf8a;
         const mesh = buildBolt(boltColor);
         const ox = this.playerPos.x + right.x * lat;
@@ -1022,13 +1027,13 @@ export class Game {
         this.projectiles.push({
           pos: new THREE.Vector3(ox, 0, oz),
           vel: d.clone().multiplyScalar(18),
-          damage: this.stats.damage * (crit ? 2 : 1),
+          damage: overload ? this.baseDamage : this.stats.damage * (crit ? 2 : 1),
           fromPlayer: true,
           targetEnemies: false,
-          pierceLeft: this.stats.pierce,
-          ricochetLeft: this.stats.ricochet,
+          pierceLeft: overload ? 0 : this.stats.pierce,
+          ricochetLeft: overload ? 0 : this.stats.ricochet,
           hit: new Set(),
-          burnDps: this.stats.burnDps,
+          burnDps: overload ? 0 : this.stats.burnDps,
           mesh,
           life: 2.2,
           hitRadius: 0.5,
@@ -1330,8 +1335,8 @@ export class Game {
       const target = this.nearestVisibleEnemy(this.playerPos);
       if (target) {
         this.firePlayerVolley(target);
-        // Overload: 800 RPM (13.3/s) — never slower than the built-up fire rate
-        const rof = this.overloadT > 0 ? Math.max(this.stats.fireRate, 800 / 60) : this.stats.fireRate;
+        // Overload: a FIXED 800 RPM — ROF upgrades do not stack with it
+        const rof = this.overloadT > 0 ? 800 / 60 : this.stats.fireRate;
         this.fireCd = 1 / rof;
       }
     }
