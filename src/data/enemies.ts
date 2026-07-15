@@ -75,7 +75,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
     radius: 0.44,
     xp: 6,
     cost: 1.5,
-    range: 6.5,
+    range: 7.5, // +15%: the bile reaches further than you'd like
+
     bodyColor: 0x6f9448,
     eyeColor: 0xa8ff3c,
     scale: 1,

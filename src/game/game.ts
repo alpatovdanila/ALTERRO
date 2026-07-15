@@ -397,17 +397,18 @@ export class Game {
     const E = ENEMIES;
     // ranged presence runs HIGH throughout — the air should be full of things
     // to dodge, not just teeth to outrun
-    if (n <= 2) return [{ def: E.husk, w: 4 }, { def: E.crawler, w: 3 }, { def: E.spitter, w: 1 }]; // surface
-    if (n === 3) return [{ def: E.husk, w: 3 }, { def: E.crawler, w: 2 }, { def: E.spitter, w: 2 }];
-    if (n <= 5) return [{ def: E.ram, w: 3 }, { def: E.polyp, w: 3 }, { def: E.spitter, w: 1 }, { def: E.crawler, w: 1 }]; // cargo
-    if (n === 6) return [{ def: E.husk, w: 3 }, { def: E.wretch, w: 2 }, { def: E.spitter, w: 2 }]; // quarters
-    if (n === 7) return [{ def: E.crawler, w: 5 }, { def: E.spitter, w: 2 }, { def: E.husk, w: 1 }]; // mess
-    if (n === 8) return [{ def: E.spitter, w: 4 }, { def: E.crawler, w: 2 }, { def: E.polyp, w: 1 }]; // hydroponics
-    if (n <= 10) return [{ def: E.ram, w: 3 }, { def: E.polyp, w: 3 }, { def: E.wretch, w: 1 }, { def: E.spitter, w: 1 }]; // engines
-    if (n === 11) return [{ def: E.wretch, w: 3 }, { def: E.spitter, w: 2 }, { def: E.ram, w: 1 }, { def: E.polyp, w: 1 }];
-    if (n === 12) return [{ def: E.wretch, w: 2 }, { def: E.polyp, w: 3 }, { def: E.spitter, w: 2 }]; // reactor
-    if (n === 13) return [{ def: E.wretch, w: 3 }, { def: E.spitter, w: 3 }, { def: E.polyp, w: 1 }]; // control
-    return [{ def: E.polyp, w: 4 }, { def: E.ram, w: 2 }, { def: E.spitter, w: 2 }]; // fire control
+    // (spitter weights carry a 1.25x bump — the light ranged line leads the hell)
+    if (n <= 2) return [{ def: E.husk, w: 4 }, { def: E.crawler, w: 3 }, { def: E.spitter, w: 1.25 }]; // surface
+    if (n === 3) return [{ def: E.husk, w: 3 }, { def: E.crawler, w: 2 }, { def: E.spitter, w: 2.5 }];
+    if (n <= 5) return [{ def: E.ram, w: 3 }, { def: E.polyp, w: 3 }, { def: E.spitter, w: 1.25 }, { def: E.crawler, w: 1 }]; // cargo
+    if (n === 6) return [{ def: E.husk, w: 3 }, { def: E.wretch, w: 2 }, { def: E.spitter, w: 2.5 }]; // quarters
+    if (n === 7) return [{ def: E.crawler, w: 5 }, { def: E.spitter, w: 2.5 }, { def: E.husk, w: 1 }]; // mess
+    if (n === 8) return [{ def: E.spitter, w: 5 }, { def: E.crawler, w: 2 }, { def: E.polyp, w: 1 }]; // hydroponics
+    if (n <= 10) return [{ def: E.ram, w: 3 }, { def: E.polyp, w: 3 }, { def: E.wretch, w: 1 }, { def: E.spitter, w: 1.25 }]; // engines
+    if (n === 11) return [{ def: E.wretch, w: 3 }, { def: E.spitter, w: 2.5 }, { def: E.ram, w: 1 }, { def: E.polyp, w: 1 }];
+    if (n === 12) return [{ def: E.wretch, w: 2 }, { def: E.polyp, w: 3 }, { def: E.spitter, w: 2.5 }]; // reactor
+    if (n === 13) return [{ def: E.wretch, w: 3 }, { def: E.spitter, w: 3.75 }, { def: E.polyp, w: 1 }]; // control
+    return [{ def: E.polyp, w: 4 }, { def: E.ram, w: 2 }, { def: E.spitter, w: 2.5 }]; // fire control
   }
 
   private pickWeighted(pool: { def: EnemyDef; w: number }[]): EnemyDef {
