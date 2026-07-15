@@ -57,7 +57,7 @@ function startRun(ult: UltimateDef, trait: TraitId) {
       const g = game!;
       g.paused = true;
       const cards = rollCards(3, g.cardCtx, () => uiRng.next());
-      showWheel(cards, g.ultTier, (card) => {
+      showWheel(cards, (card) => {
         card.apply(g.cardCtx);
         clearScreen();
         g.paused = false;

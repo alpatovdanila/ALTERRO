@@ -1,7 +1,7 @@
 import type { CardDef } from '../data/cards';
 import { RARITY_LABEL } from '../data/cards';
 import { sfx } from '../core/sfx';
-import { ULTIMATES, type UltimateDef, TIER_NAME, chargeLabel } from '../data/ultimates';
+import { ULTIMATES, type UltimateDef, chargeLabel } from '../data/ultimates';
 import { TRAITS, type TraitId } from '../data/traits';
 import type { RunStats } from '../game/game';
 
@@ -107,12 +107,12 @@ export function showStart(
 }
 
 /** The Rite Wheel: pick 1 of 3 (DESIGN.md §3.3) */
-export function showWheel(cards: CardDef[], tier: number, onPick: (c: CardDef) => void) {
+export function showWheel(cards: CardDef[], onPick: (c: CardDef) => void) {
   const el = screen();
   el.innerHTML = `
     <div class="screen-head">НОВЫЙ УРОВЕНЬ — НОВАЯ СПОСОБНОСТЬ</div>
     <div class="card-row" id="wheel-row"></div>
-    <div class="hint-line">РАНГ РЕЛИКВИИ: ${TIER_NAME[tier - 1]} &nbsp;·&nbsp; 1 / 2 / 3 — ВЫБОР С КЛАВИАТУРЫ</div>
+    <div class="hint-line">1 / 2 / 3 — ВЫБОР С КЛАВИАТУРЫ</div>
   `;
   const row = el.querySelector('#wheel-row')!;
   const chosen: (() => void)[] = [];
